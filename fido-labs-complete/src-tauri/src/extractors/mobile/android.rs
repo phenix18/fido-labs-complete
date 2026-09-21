@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use rusb::UsbContext; // pour Context::devices()
 
 pub enum PhoneState {
     On,
@@ -49,8 +50,11 @@ pub fn list_usb_devices() -> Result<Vec<UsbDevice>, String> {
         }
     }
 
-    // Détection USB raw via rusb (VID/PID connus forensique)
-    if let Ok(usb_devices) = rusb::devices() {
+    // Détection USB raw via rusb (VID/PID connus forensique).
+    // On utilise un Context explicite (récupérable) au lieu de rusb::devices()
+    // qui s'appuie sur un contexte GLOBAL qui PANIQUE si libusb ne peut pas
+    // s'initialiser (ex: WSL sans passthrough USB) — ce qui faisait planter l'app.
+    if let Ok(usb_devices) = rusb::Context::new().and_then(|c| c.devices()) {
         for device in usb_devices.iter() {
             if let Ok(desc) = device.device_descriptor() {
                 let vid = format!("{:04x}", desc.vendor_id());

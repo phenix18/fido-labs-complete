@@ -125,6 +125,84 @@ fn adb_dump(serial: &str, args: &[&str]) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
+// ─── PARSEURS content-provider (format `Row: N key=val, key=val, ...`) ────────
+
+/// Découpe la sortie `adb shell content query` en lignes de paires clé=valeur.
+/// La séparation se fait sur `, ` suivi d'un `clé=` (les valeurs peuvent contenir des virgules).
+fn parse_content_rows(text: &str) -> Vec<std::collections::HashMap<String, String>> {
+    let re = regex::Regex::new(r", (?=[A-Za-z_0-9]+=)").unwrap();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if !line.starts_with("Row:") { continue; }
+        // Retirer le préfixe "Row: <n> "
+        let rest = match line.splitn(3, ' ').nth(2) { Some(s) => s, None => continue };
+        let mut map = std::collections::HashMap::new();
+        for field in re.split(rest) {
+            if let Some(eq) = field.find('=') {
+                let k = field[..eq].trim().to_string();
+                let v = field[eq + 1..].trim().to_string();
+                if v != "NULL" && v != "null" { map.insert(k, v); }
+            }
+        }
+        if !map.is_empty() { out.push(map); }
+    }
+    out
+}
+
+fn epoch_ms_to_str(v: Option<&String>) -> String {
+    use chrono::TimeZone;
+    v.and_then(|s| s.parse::<i64>().ok())
+        .and_then(|ms| chrono::Utc.timestamp_millis_opt(ms).single())
+        .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| v.cloned().unwrap_or_default())
+}
+
+fn dur_to_str(v: Option<&String>) -> String {
+    match v.and_then(|s| s.parse::<i64>().ok()) {
+        Some(sec) => format!("{}:{:02}", sec / 60, sec % 60),
+        None => "-".into(),
+    }
+}
+
+fn parse_sms(text: &str) -> Vec<serde_json::Value> {
+    parse_content_rows(text).iter().map(|r| {
+        let dir = match r.get("type").map(|s| s.as_str()).unwrap_or("") {
+            "1" => "Reçu", "2" => "Envoyé", "3" => "Brouillon", "5" => "Échec", _ => "?",
+        };
+        serde_json::json!({
+            "date": epoch_ms_to_str(r.get("date")),
+            "contact": r.get("address").cloned().unwrap_or_default(),
+            "direction": dir,
+            "body": r.get("body").cloned().unwrap_or_default(),
+        })
+    }).collect()
+}
+
+fn parse_calls(text: &str) -> Vec<serde_json::Value> {
+    parse_content_rows(text).iter().map(|r| {
+        let typ = match r.get("type").map(|s| s.as_str()).unwrap_or("") {
+            "1" => "Entrant", "2" => "Sortant", "3" => "Manqué",
+            "4" => "Messagerie", "5" => "Rejeté", "6" => "Bloqué", _ => "?",
+        };
+        serde_json::json!({
+            "date": epoch_ms_to_str(r.get("date")),
+            "number": r.get("number").cloned().unwrap_or_default(),
+            "type": typ,
+            "duration": dur_to_str(r.get("duration")),
+        })
+    }).collect()
+}
+
+fn parse_contacts(text: &str) -> Vec<serde_json::Value> {
+    parse_content_rows(text).iter().map(|r| {
+        serde_json::json!({
+            "name": r.get("display_name").or_else(|| r.get("data2")).cloned().unwrap_or_default(),
+            "number": r.get("data1").cloned().unwrap_or_default(),
+        })
+    }).collect()
+}
+
 /// Extraction LOGIQUE réelle via ADB (sans root) : SMS, appels, contacts,
 /// comptes, Wi-Fi, applications, fichiers /sdcard + propriétés appareil.
 /// Chaque artefact est écrit sur disque et scellé par un SHA256 ; un manifeste
@@ -166,6 +244,9 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
     ];
 
     let mut artifacts: Vec<Artifact> = Vec::new();
+    let mut sms: Vec<serde_json::Value> = Vec::new();
+    let mut calls: Vec<serde_json::Value> = Vec::new();
+    let mut contacts: Vec<serde_json::Value> = Vec::new();
     for (name, kind, fname, args) in &sources {
         let fpath = format!("{}/{}", base, fname);
         match adb_dump(&serial, args) {
@@ -174,7 +255,15 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
                 let mut hasher = Sha256::new();
                 hasher.update(&bytes);
                 let sha = hex::encode(hasher.finalize());
-                let count = count_rows(kind, &String::from_utf8_lossy(&bytes));
+                let text = String::from_utf8_lossy(&bytes);
+                let count = count_rows(kind, &text);
+                // Parsing structuré des sources exploitables → enregistrements lisibles
+                match *kind {
+                    "sms"      => sms = parse_sms(&text),
+                    "calls"    => calls = parse_calls(&text),
+                    "contacts" => contacts = parse_contacts(&text),
+                    _ => {}
+                }
                 artifacts.push(Artifact {
                     name: (*name).into(), kind: (*kind).into(), file: fpath,
                     count, size: bytes.len() as u64, sha256: sha, status: "OK".into(),
@@ -186,6 +275,11 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
             }),
         }
     }
+
+    // Sauvegarde des données structurées (JSON) — réutilisées par les rapports
+    std::fs::write(format!("{}/sms.json", base), serde_json::to_string_pretty(&sms).unwrap_or_default()).ok();
+    std::fs::write(format!("{}/calls.json", base), serde_json::to_string_pretty(&calls).unwrap_or_default()).ok();
+    std::fs::write(format!("{}/contacts.json", base), serde_json::to_string_pretty(&contacts).unwrap_or_default()).ok();
 
     // 4. Manifeste chaîne de garde (JSON)
     let manifest = serde_json::json!({
@@ -215,6 +309,10 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
         "manifest": manifest_path,
         "manifest_sha256": manifest_sha,
         "artifacts": artifacts,
+        "sms": sms.iter().take(1000).collect::<Vec<_>>(),
+        "calls": calls.iter().take(1000).collect::<Vec<_>>(),
+        "contacts": contacts.iter().take(2000).collect::<Vec<_>>(),
+        "totals": { "sms": sms.len(), "calls": calls.len(), "contacts": contacts.len() },
     }))
 }
 
