@@ -1,0 +1,750 @@
+<title>FIDO-LABS v3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#0a0c12;--surface:#131720;--surface2:#1a2030;--border:#252d3d;--border2:#2e3850;--accent:#00e5c3;--accent2:#00b89d;--blue:#4d9fff;--warn:#f5a623;--danger:#ef4444;--success:#22c55e;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#8892a4;--faint:#3d4a60;--mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;--sw:56px;--sew:230px;--th:48px;--th2:200px}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f0f2f6;--surface:#fff;--surface2:#f5f7fb;--border:#dde1ea;--border2:#c8cdd8;--text:#1a1f2e;--muted:#5a6478;--faint:#b0b8cc}}
+:root[data-theme="light"]{--bg:#f0f2f6;--surface:#fff;--surface2:#f5f7fb;--border:#dde1ea;--border2:#c8cdd8;--text:#1a1f2e;--muted:#5a6478;--faint:#b0b8cc}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;overflow:hidden}
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sw);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:width .22s cubic-bezier(.4,0,.2,1);overflow:hidden;flex-shrink:0;z-index:20}
+#sidebar.expanded{width:var(--sew)}
+#sidebar .logo{height:var(--th);min-height:var(--th);display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+#sidebar .logo .li{width:28px;height:28px;flex-shrink:0;background:linear-gradient(135deg,var(--accent),var(--blue));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#0a0c12;font-family:var(--mono)}
+#sidebar .logo .lt{font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--text);white-space:nowrap;font-family:var(--mono);opacity:0;transition:opacity .15s .05s}
+#sidebar.expanded .lt{opacity:1}
+.nav-group{flex:1;padding:8px 0;overflow-y:auto;overflow-x:hidden}
+.nav-label{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:12px 16px 4px;white-space:nowrap;opacity:0;transition:opacity .1s}
+#sidebar.expanded .nav-label{opacity:1}
+.nav-item{display:flex;align-items:center;gap:11px;height:38px;padding:0 14px;cursor:pointer;transition:background .12s;white-space:nowrap;overflow:hidden;position:relative}
+.nav-item:hover{background:var(--surface2)}
+.nav-item.active{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:var(--accent)}
+.nav-item .ni{width:20px;flex-shrink:0;text-align:center;font-size:15px}
+.nav-item .nt{font-size:12.5px;font-weight:500;color:var(--muted);opacity:0;transition:opacity .1s .04s}
+.nav-item.active .nt{color:var(--accent)}
+#sidebar.expanded .nt{opacity:1}
+.nav-badge{margin-left:auto;background:var(--accent);color:#0a0c12;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{height:var(--th);min-height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0}
+#topbar .tt{font-size:13px;font-weight:600}
+#topbar .spacer{flex:1}
+.lc-badge{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);cursor:pointer;border:1px solid var(--border)}
+.lc-badge.dem{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent);background:color-mix(in srgb,var(--warn) 6%,transparent)}
+.lc-badge.std{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 30%,transparent);background:color-mix(in srgb,var(--blue) 6%,transparent)}
+.lc-badge.pro{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.lc-badge.site{color:var(--purple);border-color:color-mix(in srgb,var(--purple) 30%,transparent);background:color-mix(in srgb,var(--purple) 8%,transparent)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--sans);transition:opacity .12s,transform .1s;background:#fff;color:var(--text)}
+.btn:active{transform:scale(.97)}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text)}
+.btn-accent{background:var(--accent);color:#0a0c12;font-weight:600}
+.btn-accent:hover{background:var(--accent2)}
+.btn-danger{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 25%,transparent)}
+.btn-blue{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 25%,transparent)}
+.btn-purple{background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 25%,transparent)}
+.btn-orange{background:color-mix(in srgb,var(--orange) 12%,transparent);color:var(--orange);border:1px solid color-mix(in srgb,var(--orange) 25%,transparent)}
+.btn-sm{padding:3px 8px;font-size:11px;border-radius:4px}
+#content{flex:1;overflow:auto;padding:20px;min-width:0}
+.page{display:none;animation:fade .18s ease}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}
+@media(max-width:900px){.grid-4,.grid-3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.ct{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.stat{}.stat .v{font-size:26px;font-weight:700;font-family:var(--mono);color:var(--text);line-height:1}.stat .l{font-size:11px;color:var(--muted);margin-top:4px}
+.sct-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px}.sct-hdr h2{font-size:14px;font-weight:600}.sct-hdr .spacer{flex:1}
+.dp{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px}
+.dstate{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.st-on{background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success)}.st-locked{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn)}.st-off{background:color-mix(in srgb,var(--muted) 10%,transparent);color:var(--muted)}.st-broken{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)}
+.ig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.ic{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px}
+.ic .l{font-size:10px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.07em}.ic .v{font-size:12.5px;font-family:var(--mono);font-weight:500;color:var(--text);word-break:break-all}
+.pw{background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;margin:8px 0}.pb{height:100%;border-radius:4px;transition:width .3s ease;background:var(--accent)}
+.twrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:9px 12px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+.mono{font-family:var(--mono)}
+.pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;font-family:var(--mono)}
+.pill-green{background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success)}.pill-red{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)}.pill-warn{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn)}.pill-blue{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)}.pill-purple{background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple)}.pill-muted{background:color-mix(in srgb,var(--muted) 10%,transparent);color:var(--muted)}.pill-orange{background:color-mix(in srgb,var(--orange) 12%,transparent);color:var(--orange)}
+#terminal{height:var(--th2);min-height:var(--th2);background:#050710;border-top:1px solid var(--border);font-family:var(--mono);font-size:11.5px;display:flex;flex-direction:column;flex-shrink:0}
+.termbar{height:30px;min-height:30px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;flex-shrink:0}
+.termbar span{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.tdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dg{background:var(--success)}.dr{background:var(--danger)}.dgrey{background:var(--faint)}
+#termout{flex:1;overflow-y:auto;padding:8px 14px;line-height:1.7}
+.lg{display:flex;gap:10px}.lg-t{color:var(--faint);flex-shrink:0}
+.modal-layer{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-layer[hidden]{display:none!important}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:18px}
+.frow{margin-bottom:14px}.frow label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:5px}
+.frow input,.frow select,.frow textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12.5px;font-family:var(--sans);outline:none;transition:border-color .12s}
+.frow input:focus,.frow select:focus,.frow textarea:focus{border-color:var(--accent)}
+.frow textarea{min-height:70px;resize:vertical}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.ltgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:700px){.ltgrid{grid-template-columns:1fr}}
+.tc{background:var(--surface);border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:border-color .15s,background .15s;position:relative}
+.tc:hover{border-color:var(--border2)}
+.tc.s-std{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 5%,var(--surface))}.tc.s-pro{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}.tc.s-site{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 5%,var(--surface))}
+.tn{font-size:16px;font-weight:700;margin-bottom:4px}.tp{font-size:22px;font-weight:700;font-family:var(--mono);margin-bottom:10px}.tp small{font-size:11px;font-weight:400;color:var(--muted)}
+.tf{list-style:none;display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}.tf li{display:flex;align-items:center;gap:6px}.tf li::before{content:'✓';color:var(--accent);font-weight:700}.tf li.no::before{content:'✗';color:var(--faint)}.tf li.no{color:var(--faint)}.tbadge{position:absolute;top:12px;right:12px;background:var(--accent);color:#0a0c12;font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 7px;border-radius:4px}
+.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(max-width:560px){.mgrid{grid-template-columns:1fr}}
+.mi{display:flex;align-items:flex-start;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}.mi-ico{font-size:18px;flex-shrink:0;margin-top:1px}.mn{font-size:12px;font-weight:600;color:var(--text)}.md{font-size:11px;color:var(--muted);margin-top:2px}.mlck{margin-left:auto;flex-shrink:0;font-size:13px}
+.tl{display:flex;flex-direction:column;gap:0}.tli{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}.tli:last-child{border-bottom:none}.tl-dc{display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;margin-top:4px}.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.tl-line{flex:1;width:1px;background:var(--border);margin-top:3px}.tl-bd{flex:1;min-width:0}.tl-ts{font-size:10.5px;color:var(--muted);font-family:var(--mono)}.tl-desc{font-size:12.5px;margin-top:2px}.tl-act{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.lg-ok{color:var(--success)}.lg-err{color:var(--danger)}.lg-inf{color:var(--accent)}.lg-wrn{color:var(--warn)}.lg-acc{color:var(--blue)}
+.toast{position:fixed;bottom:220px;right:20px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;gap:8px;animation:si .2s;max-width:340px}.toast.ok{border-left:3px solid var(--success)}.toast.err{border-left:3px solid var(--danger)}.toast.wrn{border-left:3px solid var(--warn)}@keyframes si{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+.ui{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}.ui-ico{font-size:22px;flex-shrink:0}.ui-info{flex:1;min-width:0}.ui-n{font-size:12.5px;font-weight:600}.ui-d{font-size:11px;color:var(--muted);font-family:var(--mono)}
+/* MAP */
+.map-canvas{width:100%;height:300px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);position:relative;overflow:hidden}
+.map-pin{position:absolute;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);cursor:pointer;border:2px solid #fff;z-index:2}
+.map-pin::after{content:'';position:absolute;inset:-8px;border-radius:50%;background:inherit;opacity:.3;animation:ping 2s infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.3}100%{transform:scale(2.5);opacity:0}}
+/* Calendar */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-cell{min-height:60px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px;font-size:10px}
+.cal-cell.today{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface2))}
+.cal-cell .ev{background:var(--accent);color:#0a0c12;padding:1px 4px;border-radius:2px;margin-top:2px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-cell .n{font-weight:700;font-size:12px}
+/* Filter */
+.flt-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.flt-chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;font-family:var(--mono)}
+.flt-chip .x{cursor:pointer;color:var(--danger);font-weight:700}
+/* Report */
+.rpt-card{display:flex;align-items:center;gap:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.rpt-ico{font-size:28px;flex-shrink:0}
+.rpt-info{flex:1;min-width:0}.rpt-name{font-weight:600;font-size:13px}.rpt-meta{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.g2{grid-template-columns:1fr}}
+</style>
+
+<div id="app">
+<nav id="sidebar">
+  <div class="logo" onclick="toggleSidebar()"><div class="li">FL</div><span class="lt">FIDO-LABS v3</span></div>
+  <div class="nav-group">
+    <div class="nav-label">Général</div>
+    <div class="nav-item active" onclick="nav('dashboard')"><span class="ni">⚡</span><span class="nt">Dashboard</span></div>
+    <div class="nav-item" onclick="nav('cases')"><span class="ni">📁</span><span class="nt">Dossiers</span><span class="nav-badge" id="bcases">0</span></div>
+    <div class="nav-label">Extraction</div>
+    <div class="nav-item" onclick="nav('mobile')"><span class="ni">📱</span><span class="nt">Mobile</span></div>
+    <div class="nav-item" onclick="nav('sdcard')"><span class="ni">💾</span><span class="nt">Carte SD</span></div>
+    <div class="nav-item" onclick="nav('disk')"><span class="ni">🖴</span><span class="nt">Disque</span></div>
+    <div class="nav-label">Analyse</div>
+    <div class="nav-item" onclick="nav('whatsapp')"><span class="ni">💬</span><span class="nt">WhatsApp</span></div>
+    <div class="nav-item" onclick="nav('money')"><span class="ni">💸</span><span class="nt">Money Flow</span></div>
+    <div class="nav-item" onclick="nav('timeline')"><span class="ni">📅</span><span class="nt">Timeline</span></div>
+    <div class="nav-item" onclick="nav('calendar')"><span class="ni">🗓</span><span class="nt">Calendrier</span></div>
+    <div class="nav-item" onclick="nav('csm')"><span class="ni">🔗</span><span class="nt">Chain Custody</span></div>
+    <div class="nav-item" onclick="nav('carto')"><span class="ni">🗺</span><span class="nt">Cartographie</span></div>
+    <div class="nav-item" onclick="nav('graphes')"><span class="ni">🕸</span><span class="nt">Graphes</span></div>
+    <div class="nav-item" onclick="nav('filtres')"><span class="ni">🔎</span><span class="nt">Filtres</span></div>
+    <div class="nav-item" onclick="nav('rapports')"><span class="ni">📄</span><span class="nt">Rapports</span></div>
+    <div class="nav-label">Système</div>
+    <div class="nav-item" onclick="nav('audit')"><span class="ni">🔍</span><span class="nt">Audit</span></div>
+  </div>
+  <div style="padding:8px 0;border-top:1px solid var(--border)">
+    <div class="nav-item" onclick="nav('licence')"><span class="ni">🔑</span><span class="nt">Licence</span></div>
+    <div class="nav-item" onclick="nav('settings')"><span class="ni">⚙️</span><span class="nt">Paramètres</span></div>
+  </div>
+</nav>
+
+<div id="main">
+  <div id="topbar">
+    <span class="tt" id="topbar-title">Dashboard</span>
+    <div class="spacer"></div>
+    <span id="licbadge" class="lc-badge dem" onclick="nav('licence')" style="cursor:pointer"><span id="licicon">⚠</span><span id="liclabel">DEMO · 7j</span></span>
+    <button class="btn btn-ghost btn-sm" onclick="openModal('modal-case')">+ Dossier</button>
+    <button class="btn btn-accent btn-sm" onclick="detectDevice()">⚡ Scan USB</button>
+  </div>
+
+  <div id="content">
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="grid-4">
+        <div class="card stat"><div class="ct">Dossiers</div><div class="v" id="scases">0</div><div class="l">enquêtes</div></div>
+        <div class="card stat"><div class="ct">Appareils</div><div class="v" id="sdev">0</div><div class="l">détectés</div></div>
+        <div class="card stat"><div class="ct">Fichiers carving</div><div class="v" id="sfiles">0</div><div class="l">récupérés</div></div>
+        <div class="card stat"><div class="ct">Transactions</div><div class="v" id="stx">0</div><div class="l">parsées</div></div>
+      </div>
+      <div class="sct-hdr"><h2>🔌 Appareils USB</h2><div class="spacer"></div><button class="btn btn-ghost btn-sm" onclick="detectDevice()">Rafraîchir</button></div>
+      <div id="usbl"><div style="color:var(--muted);font-size:12px;padding:12px 0;">Aucun appareil détecté.</div></div>
+      <div class="sct-hdr" style="margin-top:20px"><h2>📁 Dossiers récents</h2><div class="spacer"></div><button class="btn btn-ghost btn-sm" onclick="nav('cases')">Voir tous</button></div>
+      <div class="twrap"><table><thead><tr><th>Référence</th><th>Nom</th><th>Opérateur</th><th>Ouvert le</th><th>Statut</th></tr></thead><tbody id="dcb"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Aucun dossier.</td></tr></tbody></table></div>
+    </div>
+
+    <!-- CASES -->
+    <div id="page-cases" class="page">
+      <div class="sct-hdr"><h2>📁 Dossiers</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openModal('modal-case')">+ Nouveau</button></div>
+      <div class="twrap"><table><thead><tr><th>Réf</th><th>Nom</th><th>Opérateur</th><th>Ouvert le</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="cb"><tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucun dossier.</td></tr></tbody></table></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div id="page-mobile" class="page">
+      <div class="sct-hdr"><h2>📱 Extraction Mobile</h2></div>
+      <div class="dp">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="font-size:28px">📱</span>
+          <div><div style="font-weight:600;font-size:14px" id="dn">Aucun appareil</div><div id="dsb" class="dstate st-off" style="margin-top:4px">— Non connecté</div></div>
+          <div class="spacer"></div><button class="btn btn-ghost" onclick="detectDevice()">🔄 Détecter</button>
+        </div>
+        <div class="ig" id="dig">
+          <div class="ic"><div class="l">Marque</div><div class="v" id="ibrand">—</div></div>
+          <div class="ic"><div class="l">Chipset</div><div class="v" id="ichip">—</div></div>
+          <div class="ic"><div class="l">Android</div><div class="v" id="iandroid">—</div></div>
+          <div class="ic"><div class="l">Série/IMEI</div><div class="v" id="iserial">—</div></div>
+          <div class="ic"><div class="l">Méthode</div><div class="v" id="imethod">—</div></div>
+          <div class="ic"><div class="l">VID:PID</div><div class="v" id="ivid">—</div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-accent" onclick="extractLogical()">📤 Extraction Logique (ADB)</button>
+          <button class="btn btn-blue" onclick="showInfo('BROM/EDL: câble EDL + test point requis')">⚡ BROM/EDL</button>
+          <button class="btn btn-ghost" onclick="showInfo('iOS: installez libimobiledevice')">🍎 iOS</button>
+        </div>
+      </div>
+      <div class="card"><div class="ct">Progression</div><div id="estatus" style="color:var(--muted);font-size:12px">En attente...</div><div class="pw" style="margin-top:8px"><div class="pb" id="epro" style="width:0%"></div></div></div>
+    </div>
+
+    <!-- SD CARD -->
+    <div id="page-sdcard" class="page">
+      <div class="sct-hdr"><h2>💾 Carte SD</h2></div>
+      <div class="grid-2">
+        <div class="card"><div class="ct">Image</div>
+          <div class="frow"><label>Source</label><input id="sds" placeholder="/dev/sdb"></div>
+          <div class="frow"><label>Destination (.dd)</label><input id="sdd" placeholder="C:\Cases\sd.dd"></div>
+          <button class="btn btn-accent" onclick="startSDImage()">▶ Image SHA256</button>
+        </div>
+        <div class="card"><div class="ct">Carving</div>
+          <div class="frow"><label>Image source</label><input id="cs" placeholder="C:\Cases\sd.dd"></div>
+          <div class="frow"><label>Sortie</label><input id="co" placeholder="C:\Cases\carved\"></div>
+          <button class="btn btn-blue" onclick="startCarving()">🔎 Carving</button>
+        </div>
+      </div>
+      <div class="card" id="sdr" style="display:none"><div class="ct">Résultats</div><div id="sdrb"></div></div>
+    </div>
+
+    <!-- DISK -->
+    <div id="page-disk" class="page">
+      <div class="sct-hdr"><h2>🖴 Disque Externe</h2><div class="spacer"></div><button class="btn btn-ghost" onclick="listDisks()">🔄 Scanner</button></div>
+      <div class="twrap" style="margin-bottom:16px"><table><thead><tr><th>Chemin</th><th>Label</th><th>Taille</th><th>FS</th><th>Type</th><th>Action</th></tr></thead><tbody id="db"><tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Cliquez Scanner</td></tr></tbody></table></div>
+      <div class="grid-2">
+        <div class="card"><div class="ct">Créer image</div>
+          <div class="frow"><label>Source</label><input id="dns" placeholder="/dev/sdb"></div>
+          <div class="frow"><label>Destination</label><input id="dnd" placeholder="C:\Cases\image"></div>
+          <div class="frow"><label>Format</label><select id="dfmt"><option value="DD">DD (brut)</option><option value="E01">E01 (EWF)</option></select></div>
+          <button class="btn btn-accent" onclick="startDiskImage()">▶ Créer + SHA256</button>
+        </div>
+        <div class="card"><div class="ct">Vérifier</div>
+          <div class="frow"><label>Image</label><input id="vp" placeholder="C:\Cases\image.dd"></div>
+          <button class="btn btn-blue" onclick="verifyImage()">✓ Vérifier SHA256</button>
+          <div id="vr" style="margin-top:12px;font-family:var(--mono);font-size:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WHATSAPP -->
+    <div id="page-whatsapp" class="page">
+      <div class="sct-hdr"><h2>💬 WhatsApp</h2></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="frow"><label>msgstore.db</label><input id="wap" placeholder="C:\Cases\msgstore.db"></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="wad" checked> Supprimés</label>
+          <button class="btn btn-accent" onclick="parseWhatsApp()">🔓 Analyser</button>
+        </div>
+      </div>
+      <div class="twrap" id="waw" style="display:none"><table><thead><tr><th>#</th><th>Date</th><th>De</th><th>À</th><th>Message</th><th>Type</th><th>Statut</th></tr></thead><tbody id="wab"></tbody></table></div>
+    </div>
+
+    <!-- MONEY -->
+    <div id="page-money" class="page">
+      <div class="sct-hdr"><h2>💸 Mobile Money</h2></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="grid-2" style="margin-bottom:0">
+          <div class="frow"><label>SMS DB</label><input id="mp" placeholder="C:\Cases\mmssms.db"></div>
+          <div class="frow"><label>Opérateur</label><select id="mpr"><option value="">Tous</option><option value="ORANGE">Orange</option><option value="MOOV">Moov</option><option value="WAVE">Wave</option><option value="MTN">MTN</option></select></div>
+        </div>
+        <button class="btn btn-accent" onclick="parseMoney()">💸 Analyser</button>
+      </div>
+      <div id="mst" style="display:none;margin-bottom:14px">
+        <div class="grid-4">
+          <div class="card stat"><div class="ct">Reçu</div><div class="v" id="mrec">0</div><div class="l">FCFA</div></div>
+          <div class="card stat"><div class="ct">Envoyé</div><div class="v" id="menv">0</div><div class="l">FCFA</div></div>
+          <div class="card stat"><div class="ct">Txs</div><div class="v" id="mcnt">0</div><div class="l">opérations</div></div>
+          <div class="card stat"><div class="ct">Suspects</div><div class="v" id="msus">0</div><div class="l" style="color:var(--danger)">⚠ à vérifier</div></div>
+        </div>
+      </div>
+      <div class="twrap" id="mtw" style="display:none"><table><thead><tr><th>Date</th><th>Op</th><th>Type</th><th>Montant</th><th>De</th><th>Vers</th><th>Solde</th><th>Réf</th></tr></thead><tbody id="mb"></tbody></table></div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div id="page-timeline" class="page">
+      <div class="sct-hdr"><h2>📅 Super Timeline</h2><div class="spacer"></div><button class="btn btn-accent" onclick="buildTimeline()">⚡ Construire</button></div>
+      <div class="card" style="margin-bottom:14px"><div class="frow" style="margin-bottom:0"><label>Dossier</label><select id="tlcs"><option value="">— Tous —</option></select></div></div>
+      <div class="tl" id="tl"><div style="color:var(--muted);font-size:12px;padding:12px 0">Sélectionnez un dossier et cliquez "Construire"</div></div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div id="page-calendar" class="page">
+      <div class="sct-hdr"><h2>🗓 Calendrier — Événements</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openEventModal()">+ Événement</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="grid-2" style="margin-bottom:0">
+          <div class="frow"><label>Afficher semaine du</label><input id="cal-week" type="date"></div>
+          <div class="frow"><label>Dossier</label><select id="cal-case"><option value="">— Tous —</option></select></div>
+        </div>
+        <button class="btn btn-blue" onclick="loadCalendar()">🗓 Afficher</button>
+      </div>
+      <div class="g2">
+        <div class="card" id="cal-weekview">
+          <div class="ct" id="cal-week-title">Semaine —</div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+        <div class="card">
+          <div class="ct">Prochain événements</div>
+          <div id="cal-upcoming"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="ct">Résumé hebdomadaire</div>
+        <div class="grid-4" style="margin-top:8px">
+          <div><div style="font-family:var(--mono);font-size:22px;font-weight:700" id="cal-total">0</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent)" id="cal-extr">0</div><div style="font-size:11px;color:var(--muted)">Extractions</div></div>
+          <div><div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--warn)" id="cal-dead">0</div><div style="font-size:11px;color:var(--muted)">Deadlines</div></div>
+          <div><div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--danger)" id="cal-over">0</div><div style="font-size:11px;color:var(--muted)">En retard</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CSM -->
+    <div id="page-csm" class="page">
+      <div class="sct-hdr"><h2>🔗 Chain of Custody (CSM)</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openCustodyModal()">+ Nouvelle chaîne</button><button class="btn btn-blue btn-sm" onclick="exportCustodyAll()">📄 Export CSM</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Preuve</th><th>Type</th><th>Status</th><th>Actuellement</th><th>Actions</th></tr></thead><tbody id="csm-body"><tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucune chaîne de garde</td></tr></tbody></table></div>
+      <div class="card" id="csm-detail" style="display:none;margin-top:14px">
+        <div class="ct" id="csm-detail-title">Détails</div>
+        <div id="csm-detail-body"></div>
+      </div>
+    </div>
+
+    <!-- CARTOGRAPHIE -->
+    <div id="page-carto" class="page">
+      <div class="sct-hdr"><h2>🗺 Cartographie</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openMapModal()">+ Nouvelle carte</button></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="ct">Cartes disponibles</div>
+          <div id="carto-list"><div style="color:var(--muted);font-size:12px;padding:8px 0">Aucune carte</div></div>
+        </div>
+        <div class="card">
+          <div class="ct">Vue carte</div>
+          <div class="map-canvas" id="map-canvas">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Sélectionnez une carte</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-blue btn-sm" onclick="showInfo('Calque chaleur: activé')">🔥 Heatmap</button>
+            <button class="btn btn-purple btn-sm" onclick="showInfo('Connexions i2-style: activées')">🕸 Liens</button>
+            <button class="btn btn-ghost btn-sm" onclick="showInfo('Export KML/GeoJSON')">📤 Export</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRAPHES -->
+    <div id="page-graphes" class="page">
+      <div class="sct-hdr"><h2>🕸 Graphes i2-style</h2><div class="spacer"></div></div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="ct">Graphe de liens</div>
+          <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:var(--surface2);border-radius:8px;margin-top:8px" id="graph-1">Chargement...</div>
+          <button class="btn btn-purple btn-sm" onclick="buildLinkGraph()" style="margin-top:8px">🕸 Générer</button>
+        </div>
+        <div class="card">
+          <div class="ct">Money Flow</div>
+          <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:var(--surface2);border-radius:8px;margin-top:8px" id="graph-2">Chargement...</div>
+          <button class="btn btn-orange btn-sm" onclick="nav('money')" style="margin-top:8px">💸 Voir Money Flow</button>
+        </div>
+        <div class="card">
+          <div class="ct">Heatmap temporel</div>
+          <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:var(--surface2);border-radius:8px;margin-top:8px" id="graph-3">Chargement...</div>
+          <button class="btn btn-blue btn-sm" onclick="nav('timeline')" style="margin-top:8px">📅 Voir Timeline</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="ct">Détection d'anomalies</div>
+        <div id="graph-anomalies" style="margin-top:8px;font-size:12px;color:var(--muted)">Générez les graphes pour voir les anomalies détectées.</div>
+      </div>
+    </div>
+
+    <!-- FILTRES -->
+    <div id="page-filtres" class="page">
+      <div class="sct-hdr"><h2>🔎 Filtres avancés</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openFilterModal()">+ Nouveau filtre</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="ct">Filtres actifs</div>
+        <div id="filter-chips" style="margin-top:8px"><div style="color:var(--muted);font-size:12px">Aucun filtre actif</div></div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Nom</th><th>Catégories</th><th>Mots-clés</th><th>Date</th><th>Résultats</th><th>Actions</th></tr></thead><tbody id="filter-body"><tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucun filtre</td></tr></tbody></table></div>
+      <div class="card" id="filter-results" style="display:none;margin-top:14px">
+        <div class="ct" id="filter-results-title">Résultats</div>
+        <div id="filter-results-body"></div>
+      </div>
+    </div>
+
+    <!-- RAPPORTS -->
+    <div id="page-rapports" class="page">
+      <div class="sct-hdr"><h2>📄 Rapports</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openReportModal()">+ Générer rapport</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="ct">Modèles disponibles</div>
+        <div id="report-templates" style="margin-top:8px"></div>
+      </div>
+      <div class="sct-hdr"><h2>Rapports générés</h2></div>
+      <div id="report-list"></div>
+    </div>
+
+    <!-- AUDIT -->
+    <div id="page-audit" class="page">
+      <div class="sct-hdr"><h2>🔍 Journal d'audit</h2><div class="spacer"></div><button class="btn btn-ghost" onclick="loadAudit()">🔄</button><button class="btn btn-blue btn-sm" onclick="exportCoC()">📄 Custody</button></div>
+      <div class="twrap"><table><thead><tr><th>Timestamp</th><th>Opérateur</th><th>Action</th><th>Cible</th><th>Hash</th><th>Dossier</th></tr></thead><tbody id="ab"><tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Journal vide.</td></tr></tbody></table></div>
+    </div>
+
+    <!-- LICENCE -->
+    <div id="page-licence" class="page">
+      <div class="sct-hdr"><h2>🔑 Licence</h2></div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="ct">Licence active</div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div><div style="font-size:20px;font-weight:700" id="lstier">DEMO</div><div style="font-size:12px;color:var(--muted)" id="lstorg">Mode démo</div></div>
+          <div style="margin-left:auto;text-align:right"><div style="font-family:var(--mono);font-size:12px;color:var(--muted)">Expire dans</div><div style="font-size:22px;font-weight:700;font-family:var(--mono)" id="lstdays">7</div><div style="font-size:11px;color:var(--muted)">jours</div></div>
+        </div>
+        <div style="margin-top:12px"><div style="font-size:11px;color:var(--muted);margin-bottom:6px">HARDWARE ID</div><div style="font-family:var(--mono);font-size:11.5px;color:var(--accent)" id="lhw">—</div></div>
+      </div>
+      <div class="ct" style="margin-bottom:12px">OFFRES</div>
+      <div class="ltgrid">
+        <div class="tc" id="tcstd" onclick="selTier('Standard')"><div class="tn" style="color:var(--blue)">Standard</div><div class="tp">Sur devis<small>/an</small></div>
+          <ul class="tf"><li>Extraction ADB</li><li>Image SD</li><li>Carving basique</li><li>WhatsApp</li><li>Rapports</li><li class="no">BROM/EDL</li><li class="no">E01</li><li class="no">Money Flow</li><li class="no">Timeline</li><li class="no">Multi-postes</li></ul>
+        </div>
+        <div class="tc" id="tcpro" onclick="selTier('Pro')"><div class="tbadge">RECOMMANDÉ</div><div class="tn" style="color:var(--accent)">Pro</div><div class="tp">Sur devis<small>/an</small></div>
+          <ul class="tf"><li>Tout Standard +</li><li>BROM/EDL</li><li>E01</li><li>Carving avancé</li><li>Money Flow</li><li>Timeline</li><li>Graphes</li><li>YARA</li><li class="no">Multi-postes</li><li class="no">API REST</li></ul>
+        </div>
+        <div class="tc" id="tcsite" onclick="selTier('Site')"><div class="tn" style="color:var(--purple)">Site / Entreprise</div><div class="tp">Sur devis<small>/an</small></div>
+          <ul class="tf"><li>Tout Pro +</li><li>Postes illimités</li><li>API REST</li><li>Support</li><li>Formation</li><li>Maj 2 ans</li></ul>
+        </div>
+      </div>
+      <div class="card" style="max-width:540px">
+        <div class="ct">ACTIVER UNE CLÉ</div>
+        <div class="frow"><label>Tier</label><select id="actr"><option value="Standard">Standard</option><option value="Pro">Pro</option><option value="Site">Site</option></select></div>
+        <div class="frow"><label>Clé</label><input id="ack" placeholder="PRO-XXXX-XXXX" style="font-family:var(--mono)"></div>
+        <div class="frow"><label>Organisation</label><input id="acorg"></div>
+        <div class="frow"><label>Opérateur</label><input id="acop"></div>
+        <div class="frow"><label>Expiration</label><input id="acexp" type="date"></div>
+        <div class="modal-footer" style="margin-top:14px"><button class="btn btn-ghost" onclick="nav('dashboard')">Annuler</button><button class="btn btn-accent" onclick="activateLicense()">✓ Activer</button></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted)">Contactez <span style="color:var(--accent);font-family:var(--mono)">contact@fido-labs.com</span><br>Clé liée au HARDWARE ID (anti-copie).</div>
+      </div>
+      <div style="margin-top:24px"><div class="ct" style="margin-bottom:12px">MODULES</div><div class="mgrid" id="modgrid"></div></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="page-settings" class="page">
+      <div class="sct-hdr"><h2>⚙️ Paramètres</h2></div>
+      <div class="grid-2">
+        <div class="card"><div class="ct">Opérateur</div>
+          <div class="frow"><label>Nom</label><input id="sop" value="Investigateur FIDO-LABS"></div>
+          <div class="frow"><label>Organisation</label><input id="sorg"></div>
+          <button class="btn btn-accent btn-sm" onclick="saveSettings()">💾 Sauvegarder</button>
+        </div>
+        <div class="card"><div class="ct">Chemins</div>
+          <div class="frow"><label>Dossiers</label><input id="scd" value="C:\FIDO-LABS\Cases"></div>
+          <div class="frow"><label>Exports</label><input id="sed" value="C:\FIDO-LABS\Exports"></div>
+          <button class="btn btn-accent btn-sm" onclick="saveSettings()">💾 Sauvegarder</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px"><div class="ct">À propos</div>
+        <div style="font-family:var(--mono);font-size:12px;line-height:2;color:var(--muted)">
+          FIDO-LABS v3.0 — Forensic Integrated Data Operator<br>
+          Build: <span style="color:var(--accent)">2024.09</span> · Tauri 1.6 · Rust 2021<br>
+          Modules: Extraction, Analyse, CSM, Cartographie, Graphes, Calendrier, Filtres, Rapports<br>
+          ⚠️ Usage légal uniquement avec autorisation judiciaire.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="terminal">
+    <div class="termbar"><div class="tdot dg" id="tdot"></div><span>FIDO-LABS Console</span><div class="spacer"></div><button class="btn btn-ghost btn-sm" onclick="clearTerm()">Effacer</button></div>
+    <div id="termout"></div>
+  </div>
+</div>
+
+
+<!-- DIV PROTECTEUR UNIQUE POUR TOUTES LES MODALES -->
+
+<div id="modal-case" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>📁 Nouveau dossier</h3>
+    <div class="frow"><label>Nom</label><input id="cn"></div>
+    <div class="frow"><label>Référence</label><input id="cr"></div>
+    <div class="frow"><label>Opérateur</label><input id="cop"></div>
+    <div class="frow"><label>Notes</label><textarea id="cno"></textarea></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-case')">Annuler</button><button class="btn btn-accent" onclick="createCase()">Créer</button></div>
+  </div>
+</div>
+
+<div id="modal-evt" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>🗓 Nouvel événement</h3>
+    <div class="frow"><label>Titre</label><input id="evt-title"></div>
+    <div class="frow"><label>Description</label><textarea id="evt-desc"></textarea></div>
+    <div class="frow"><label>Début</label><input id="evt-start" type="datetime-local"></div>
+    <div class="frow"><label>Fin</label><input id="evt-end" type="datetime-local"></div>
+    <div class="frow"><label>Catégorie</label><select id="evt-cat"><option>Extraction</option><option>Analysis</option><option>Transfer</option><option>Hearing</option><option>Deadline</option><option>Meeting</option><option>Reminder</option></select></div>
+    <div class="frow"><label>Dossier</label><select id="evt-case"><option value="">— Tous —</option></select></div>
+    <div class="frow"><label>Assigné à</label><input id="evt-assign"></div>
+    <div class="frow"><label>Lieu</label><input id="evt-loc"></div>
+    <div class="frow"><label>Priorité</label><select id="evt-prio"><option>Normal</option><option>High</option><option>Critical</option><option>Low</option></select></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evt')">Annuler</button><button class="btn btn-accent" onclick="createEvent()">Créer</button></div>
+  </div>
+</div>
+
+<div id="modal-csm" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>🔗 Nouvelle chaîne de garde</h3>
+    <div class="frow"><label>Identifiant preuve</label><input id="csm-eid"></div>
+    <div class="frow"><label>Type</label><select id="csm-type"><option>Mobile</option><option>SD Card</option><option>Disk Image</option><option>Document</option></select></div>
+    <div class="frow"><label>Description</label><textarea id="csm-desc"></textarea></div>
+    <div class="frow"><label>Hash SHA256</label><input id="csm-hash" style="font-family:var(--mono)"></div>
+    <div class="frow"><label>Taille (octets)</label><input id="csm-size" type="number"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-csm')">Annuler</button><button class="btn btn-accent" onclick="createCustody()">Créer</button></div>
+  </div>
+</div>
+
+<div id="modal-map" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>🗺 Nouvelle carte</h3>
+    <div class="frow"><label>Nom</label><input id="map-name"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-map')">Annuler</button><button class="btn btn-accent" onclick="createMap()">Créer</button></div>
+  </div>
+</div>
+
+<div id="modal-flt" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>🔎 Nouveau filtre</h3>
+    <div class="frow"><label>Nom</label><input id="flt-name"></div>
+    <div class="frow"><label>Date début</label><input id="flt-from" type="date"></div>
+    <div class="frow"><label>Date fin</label><input id="flt-to" type="date"></div>
+    <div class="frow"><label>Catégories (virgule)</label><input id="flt-cat" placeholder="MESSAGE,CALL,TRANSACTION"></div>
+    <div class="frow"><label>Mots-clés (virgule)</label><input id="flt-kw" placeholder="suspect, transfert, or"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-flt')">Annuler</button><button class="btn btn-accent" onclick="createFilter()">Créer</button></div>
+  </div>
+</div>
+
+<div id="modal-rpt" class="modal-layer" hidden>
+  <div class="modal">
+    <h3>📄 Générer rapport</h3>
+    <div class="frow"><label>Nom</label><input id="rpt-name"></div>
+    <div class="frow"><label>Type</label><select id="rpt-type"><option value="General">Rapport général</option><option value="SpecificUser">Suspect individuel</option><option value="DeviceReport">Appareil</option><option value="TimelineReport">Timeline</option><option value="CustodyReport">Chain of Custody</option><option value="MoneyFlowReport">Flux financiers</option><option value="EvidenceCatalog">Catalogue preuves</option></select></div>
+    <div class="frow"><label>Format</label><select id="rpt-format"><option value="PDF">PDF</option><option value="DOCX">DOCX</option><option value="TXT">TXT</option><option value="HTML">HTML</option></select></div>
+    <div class="frow"><label>Filtres JSON</label><textarea id="rpt-filters" style="font-family:var(--mono);min-height:100px">{}</textarea></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-rpt')">Annuler</button><button class="btn btn-accent" onclick="generateReport()">✓ Générer</button></div>
+  </div>
+</div>
+<script>
+
+function openModal(id){
+    document.querySelectorAll('.modal-layer').forEach(m=>m.hidden=true);
+    document.getElementById(id).hidden=false;
+}
+function closeModal(id){
+    document.getElementById(id).hidden=true;
+    document.querySelectorAll(`#${id} .frow input, #${id} .frow textarea`).forEach(f=>f.value='');
+}
+function removeFilter(id){
+    S.filters = S.filters.filter(f => f.id !== id);
+    renderFilters();
+    renderFilterChips();
+}
+function mods(){
+    return [
+        {id:'mobile_logical',name:'Extraction Mobile',description:'ADB/Agent logically'},
+        {id:'mobile_brom',name:'BROM/EDL',description:'Extraction physique MTK/QC'},
+        {id:'sdcard_image',name:'Image SD',description:'Image bit par bit SD'},
+        {id:'sdcard_carve',name:'Carving SD',description:'Récupération fichiers SD'},
+        {id:'disk_dd',name:'Image Disque DD',description:'Copie physique binaire'},
+        {id:'disk_e01',name:'Image Disque E01',description:'Image format EnCase'},
+        {id:'disk_carve',name:'Carving Disque',description:'Récupération HDD/SSD'},
+        {id:'whatsapp',name:'WhatsApp',description:'Décodeur msgstore.db'},
+        {id:'money_flow',name:'Money Flow',description:'Parsing transactions'},
+        {id:'timeline',name:'Timeline',description:'Chronologie unifiée'},
+        {id:'link_graph',name:'Graphes',description:'Réseaux relationnels'},
+        {id:'reports',name:'Rapports',description:'Export chain custody'},
+        {id:'csm',name:'CSM',description:'Conduite des scellés'},
+        {id:'calendar',name:'Calendrier',description:'Planning'},
+        {id:'cartography',name:'Cartographie',description:'Cartes geo'},
+        {id:'filters',name:'Filtres',description:'Recherche'},
+        {id:'reports_gen',name:'Rapports Doc',description:'PDF/Word'}
+    ];
+}
+function addDays(dateStr, days){
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+}
+
+const S={currentPage:'dashboard',license:{tier:'Demo',valid:true,days_remaining:7,modules:['mobile_logical','sdcard_image','sdcard_carve','disk_dd','whatsapp','reports','csm','calendar','cartography','filters','reports_gen'],licensee:'Mode Démo',operator_name:'Investigateur',hardware_id:'DEMO-HW-0000',expires_at:''},cases:[],operator:'Investigateur FIDO-LABS',activeCaseId:'',devices:[],totalFiles:0,totalTx:0,calendarEvents:[],custodyChains:[],cartoMaps:[],filters:[],reports:[]};
+async function invoke(cmd,args={}){
+  if(window.__TAURI__){try{return await window.__TAURI__.tauri.invoke(cmd,args)}catch(e){log('err',cmd+':'+e);throw e}}
+  return demoInvoke(cmd,args);
+}
+function demoInvoke(cmd,a){
+  const d=ms=>new Promise(r=>setTimeout(r,ms));
+  const X={
+    detect_device:async()=>({brand:'Tecno',model:'Spark 10',chipset:'MT6765',android_version:'13',state:'ON',extraction_method:'ADB Logical',serial:'R3CT203BXHJ',imei:'356789012345678',storage_gb:64,battery:78}),
+    list_usb_devices:async()=>([{vid:'0e8d',pid:'0003',manufacturer:'MediaTek',product:'MT6765 BROM',serial:'MTK-0001',detected_type:'BROM_MTK'},{vid:'18d1',pid:'4ee7',manufacturer:'Google',product:'Android ADB',serial:'ADB123',detected_type:'ADB'}]),
+    list_cases:async()=>S.cases,create_case:async(a2)=>{const c={id:'c'+Date.now(),name:a2.name,reference:a2.reference,operator:a2.operator_name||a2.operator,created_at:new Date().toISOString(),status:'OUVERT',notes:a2.notes};S.cases.push(c);return c},
+    list_disks:async()=>([{path:'\\\\.\\PhysicalDrive1',label:'Kingston 32GB',size_gb:31.9,filesystem:'FAT32',removable:true},{path:'\\\\.\\PhysicalDrive2',label:'Seagate 1TB',size_gb:931.5,filesystem:'NTFS',removable:false}]),
+    create_image:async(a2)=>{await d(1200);return `Image: ${a2.dest_path}.${a2.format.toLowerCase()} | SHA256: a3f8...`},
+    verify_image:async()=>'✓ INTÉGRITÉ OK | SHA256: a3f8c1d2e4b7f0129a...',
+    image_sd:async(a2)=>{await d(800);return `Image SD créée | SHA256: f2a1...`},
+    carve_files:async(a2)=>{await d(2000);return {total:63,stats:{Images:35,Videos:12,Documents:10,Databases:6},output_dir:a2.output_dir}},
+    parse_whatsapp_db:async()=>([{id:1,timestamp:'2024-03-15T08:23:11Z',from_jid:'+22670123456',to_jid:'moi',body:'Ok je transfère maintenant',media_type:0,deleted:false,chat_name:'Moussa Koné'},{id:2,timestamp:'2024-03-15T09:11:00Z',from_jid:'moi',to_jid:'+22601234567',body:'Reçu',media_type:0,deleted:false,chat_name:'Alpha Diallo'}]),
+    parse_mobile_money:async()=>([{id:'t1',date:'2024-03-15T08:45:00Z',provider:'ORANGE',type_tx:'RECU',montant:150000,currency:'XOF',from_num:'+22670123456',to_num:'moi',balance_after:320000,reference:'OM240315001'},{id:'t2',date:'2024-03-15T11:20:00Z',provider:'WAVE',type_tx:'ENVOYE',montant:75000,currency:'XOF',from_num:'moi',to_num:'+22601234567',balance_after:245000,reference:'WV240315042'},{id:'t3',date:'2024-03-16T09:00:00Z',provider:'ORANGE',type_tx:'PAIEMENT',montant:25000,currency:'XOF',from_num:'moi',to_num:'commerçant',balance_after:220000,reference:'OM240316003'}]),
+    analyze_money_flow:async()=>({nodes:[{id:'n1',number:'+22670123456',total_received:150000,total_sent:25000,tx_count:2,suspicious:false},{id:'n2',number:'+22601234567',total_received:75000,total_sent:0,tx_count:1,suspicious:false}],edges:[{from:'+22670123456',to:'+22601234567',total_amount:75000,count:1,provider:'WAVE'},{from:'moi',to:'commerçant',total_amount:25000,count:1,provider:'ORANGE'}],total_transactions:3,total_amount:250000,suspicious_nodes:0}),
+    build_timeline:async()=>'Timeline construite',
+    get_timeline_events:async(a2)=>([{id:'ev1',timestamp:'2024-03-15T08:23:11Z',source:'WHATSAPP',event_type:'MESSAGE',description:'Message: "Ok je transfère"',actor:'+22670123456',target:'moi',evidence_path:'msgstore.db:row_1024',case_id:a2.case_id||''},{id:'ev2',timestamp:'2024-03-15T08:45:00Z',source:'MONEY',event_type:'TRANSACTION',description:'Orange 150,000 FCFA',actor:'+22670123456',target:'moi',evidence_path:'sms.db:row_88',case_id:a2.case_id||''},{id:'ev3',timestamp:'2024-03-15T09:12:33Z',source:'MOBILE_ADB',event_type:'APP_EVENT',description:'App installée: com.vpn.tool',actor:'device',target:'system',evidence_path:'packages.xml',case_id:a2.case_id||''}]),
+    get_audit_log:async(a2)=>([{id:'a1',timestamp:new Date().toISOString(),operator:S.operator,action:'DETECT_DEVICE',target:'ADB:R3CT203BXHJ',hash:'a3f8c1d200000000',case_id:a2.case_id||'demo'}]),
+    log_action:async()=>'logged-'+Date.now(),
+    export_chain_of_custody:async(a2)=>`Rapport exporté: ${a2.output_path}`,
+    activate_license:async(a2)=>{const m={Standard:['mobile_logical','sdcard_image','sdcard_carve','disk_dd','whatsapp','reports','csm','calendar','cartography','filters','reports_gen'],Pro:['mobile_logical','mobile_brom','sdcard_image','sdcard_carve','disk_dd','disk_e01','disk_carve','whatsapp','money_flow','timeline','link_graph','yara','reports','csm','calendar','cartography','filters','reports_gen'],Site:['mobile_logical','mobile_brom','sdcard_image','sdcard_carve','disk_dd','disk_e01','disk_carve','whatsapp','money_flow','timeline','link_graph','yara','reports','csm','calendar','cartography','filters','reports_gen','multi_seat','api_access']};
+      return {key:a2.key,tier:a2.tier,licensee:a2.licensee,operator_name:a2.operator_name,seats:a2.tier==='Site'?9999:1,issued_at:new Date().toISOString(),expires_at:a2.expires_at,days_remaining:365,valid:true,modules:m[a2.tier]||m.Standard,hardware_id:'DEMO-HW-0000'}},
+    get_license_status:async()=>S.license,get_available_modules:async()=>mods(),check_module_access:async(a2)=>S.license.modules.includes(a2.module_id),
+    extract_logical:async(a2)=>{await d(1500);return `Extraction terminée: ${a2.output_dir}/manifest.txt`},
+    // CSM
+    create_custody:async(a2)=>{const c={id:'csm-'+Date.now(),case_id:a2.case_id,evidence_id:a2.evidence_id,evidence_type:a2.evidence_type,description:a2.description,hash_sha256:a2.hash_sha256,size_bytes:a2.size_bytes||0,status:'IN_CUSTODY',created_at:new Date().toISOString(),current_holder:S.operator,steps:[{id:'s1',step_number:1,action:'Collection',operator:S.operator,organization:'FIDO-LABS',location:'Local',timestamp:new Date().toISOString(),signature:'sig-1234',notes:'Preuve collectée',evidence_id:a2.evidence_id}]};S.custodyChains.push(c);return c},
+    get_custody_chains:async(a2)=>S.custodyChains.filter(c=>!a2.case_id||c.case_id==a2.case_id),
+    get_custody:async(a2)=>S.custodyChains.find(c=>c.id==a2.chain_id),
+    add_custody_step:async(a2)=>{const c=S.custodyChains.find(x=>x.id==a2.step.chain_id);if(!c)throw 'Non trouvée';c.steps.push({...a2.step,id:'s'+Date.now(),step_number:c.steps.length+1,timestamp:new Date().toISOString(),signature:'sig-'+Date.now()});return c},
+    transfer_custody:async(a2)=>{const c=S.custodyChains.find(x=>x.id==a2.chain_id);if(!c)throw 'Non trouvée';c.current_holder=a2.new_holder;c.status='IN_CUSTODY';return c},
+    // CARTO
+    create_map:async(a2)=>{const m={id:'map-'+Date.now(),name:a2.name,case_id:a2.case_id,points:[],heatmap_data:[],connections:[],created_at:new Date().toISOString()};S.cartoMaps.push(m);return m},
+    add_geo_point:async(a2)=>({id:'gp-'+Date.now(),lat:a2.lat,lon:a2.lon,label:a2.label,category:a2.category,confidence:a2.confidence,timestamp:new Date().toISOString(),source:a2.source,metadata:a2.metadata}),
+    // CALENDAR
+    create_event:async(a2)=>{const e={id:'evt-'+Date.now(),title:a2.title,description:a2.description,start:a2.start,end:a2.end,category:{Extraction:0,Analysis:1,Transfer:2,Hearing:3,Deadline:4,Meeting:5,Reminder:6,Custom:7}[a2.category]||0,status:0,case_id:a2.case_id,assigned_to:a2.assigned_to,location:a2.location,priority:{Low:0,Normal:1,High:2,Critical:3}[a2.priority]||1,reminders:[]};S.calendarEvents.push(e);return e},
+    get_events:async(a2)=>S.calendarEvents.filter(e=>!a2.case_id||e.case_id==a2.case_id),
+    get_events_by_day:async(a2)=>S.calendarEvents.filter(e=>e.start.startsWith(a2.date)),
+    update_event_status:async(a2)=>{const e=S.calendarEvents.find(x=>x.id==a2.event_id);if(!e)throw 'Non trouvé';e.status=a2.status==='InProgress'?1:a2.status==='Completed'?2:a2.status==='Cancelled'?3:0;return e},
+    add_reminder:async(a2)=>({id:'rm-'+Date.now(),event_id:a2.event_id,remind_at:a2.remind_at,sent:false}),
+    get_weekly_summary:async(a2)=>({week_start:a2.date,total:S.calendarEvents.length,by_category:{extraction:0,analysis:1,transfer:0,hearing:0,deadline:0,meeting:0},overdue:0,upcoming:S.calendarEvents.length}),
+    // FILTERS
+    create_filter:async(a2)=>{const f={id:'flt-'+Date.now(),name:a2.name,date_from:a2.date_from,date_to:a2.date_to,operators:a2.operators,device_ids:a2.device_ids,categories:a2.categories,severities:a2.severities,keywords:a2.keywords,exclude_deleted:a2.exclude_deleted||false,case_id:a2.case_id};S.filters.push(f);return f},
+    list_filters:async(a2)=>S.filters.filter(f=>!a2.case_id||f.case_id==a2.case_id),
+    apply_filter:async(a2)=>({filter_id:a2.filter_id,total_matched:50,items:[],execution_time_ms:12}),
+    save_filter_as_template:async()=>'Template sauvegardé',
+    // REPORTS
+    generate_report:async(a2)=>{const r={id:'rpt-'+Date.now(),name:a2.name,report_type:a2.report_type,format:a2.format,case_id:a2.case_id,author:a2.author,created_at:new Date().toISOString(),file_path:`reports/${a2.case_id}_${Date.now()}.${a2.format.toLowerCase()}`,sections:[],filters:JSON.parse(a2.filters_json||'{}'),page_count:0,hash_sha256:'hash-'+Date.now(),signed:false};S.reports.push(r);return r},
+    generate_general_report:async(a2)=>demoInvoke('generate_report',{name:`Rapport Général - ${a2.case_id}`,report_type:'General',format:'PDF',case_id:a2.case_id,author:a2.author,filters_json:'{}'}),
+    generate_specific_user_report:async(a2)=>demoInvoke('generate_report',{name:`Rapport - ${a2.user_identifier}`,report_type:'SpecificUser',format:'PDF',case_id:a2.case_id,author:a2.author,filters_json:`{"keywords":["${a2.user_identifier}"]}`}),
+    list_reports:async(a2)=>S.reports.filter(r=>!a2.case_id||r.case_id==a2.case_id),
+    get_report:async(a2)=>S.reports.find(r=>r.id==a2.report_id),
+    sign_report:async(a2)=>{const r=S.reports.find(x=>x.id==a2.report_id);if(!r)throw 'Non trouvé';r.signed=true;return r},
+    get_available_templates:async()=>([{id:'tpl-gen',name:'Rapport Général',report_type:'General',description:'Synthèse complète',sections:['Résumé','Méthodologie','Preuves','Analyse','Résultats','Annexes']},{id:'tpl-user',name:'Rapport Suspect',report_type:'SpecificUser',description:'Focus individu',sections:['Identité','Activité','Finance','Comms','Localisation','Conclusion']},{id:'tpl-device',name:'Rapport Appareil',report_type:'DeviceReport',description:'Tech + données',sections:['Info tech','Données','Apps','Actions','Hashes']},{id:'tpl-timeline',name:'Rapport Timeline',report_type:'TimelineReport',description:'Chronologie',sections:['Chronologie','Événements','Corrélations','Anomalies']},{id:'tpl-custody',name:'Rapport Custody',report_type:'CustodyReport',description:'Chaîne de garde',sections:['Identité','Chaîne','Transferts','Stockage','Destitution']},{id:'tpl-money',name:'Rapport Flux',report_type:'MoneyFlowReport',description:'Analyse financière',sections:['Résumé','Graphe','Comptes','Transactions','Anomalies']}]),
+  };
+  if(!X[cmd]){log('wrn','Demo: '+cmd);return null}
+  return X[cmd](a);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function log(type,msg){const o=document.getElementById('termout');const ts=new Date().toTimeString().slice(0,8);const c={ok:'log-ok',err:'log-err',inf:'log-inf',wrn:'log-wrn',acc:'log-acc'}[type]||'log-inf';const p={ok:'[OK ]',err:'[ERR]',inf:'[INF]',wrn:'[WRN]',acc:'[ACT]'}[type]||'[INF]';const d=document.createElement('div');d.className='lg';d.innerHTML=`<span class="lg-t">${ts}</span><span class="${c}">${esc(p+' '+msg)}</span>`;o.appendChild(d);o.scrollTop=o.scrollHeight}
+function clearTerm(){document.getElementById('termout').innerHTML=''}
+function nav(pg){S.currentPage=pg;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg)?.classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.querySelector(`.nav-item[onclick*="${pg}"]`)?.classList.add('active');const T={dashboard:'Dashboard',cases:'Dossiers',mobile:'Mobile',sdcard:'Carte SD',disk:'Disque',whatsapp:'WhatsApp',money:'Money Flow',timeline:'Timeline',calendar:'Calendrier',csm:'Chain Custody',carto:'Cartographie',graphes:'Graphes',filtres:'Filtres',rapports:'Rapports',audit:'Audit',licence:'Licence',settings:'Paramètres'};document.getElementById('topbar-title').textContent=T[pg]||pg;if(pg==='licence')loadLic();if(pg==='cases')loadCases();if(pg==='calendar')loadCalendar();if(pg==='csm')loadCSM();if(pg==='carto')loadCarto();if(pg==='filtres')loadFilters();if(pg==='rapports')loadReports();if(pg==='audit')loadAudit();if(pg==='timeline')loadTlSel()}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('expanded')}
+function toast(msg,type='ok'){const e=document.createElement('div');e.className='toast '+type;e.textContent=msg;document.body.appendChild(e);setTimeout(()=>e.remove(),3500)}
+function showInfo(msg){toast(msg,'wrn');log('wrn',msg)}
+function chkMod(id){if(S.license.modules.includes(id))return true;toast(`Module "${id}" non inclus en licence ${S.license.tier}. Upgradez Pro/Site.`,'wrn');log('wrn',`Accès refusé: ${id} — ${S.license.tier}`);return false}
+async function appDir(){if(window.__TAURI__){try{return await window.__TAURI__.path.appDataDir()}catch(e){}}return'/tmp/fido-labs'}
+async function loadLic(){try{const lic=await invoke('get_license_status',{app_dir:await appDir()});if(lic){S.license=lic;updateLic(lic)}}catch(e){}}
+function updateLic(i){const b=document.getElementById('licbadge'),ic=document.getElementById('licicon'),lb=document.getElementById('liclabel');const m={Demo:'dem',Standard:'std',Pro:'pro',Site:'site'};b.className='lc-badge '+(m[i.tier]||'dem');ic.textContent={Demo:'⚠',Standard:'●',Pro:'★',Site:'◆'}[i.tier]||'⚠';lb.textContent=`${i.tier.toUpperCase()} · ${Math.max(0,i.days_remaining)}j`;document.getElementById('lstier').textContent=i.tier.toUpperCase();document.getElementById('lstier').style.color={Demo:'var(--warn)',Standard:'var(--blue)',Pro:'var(--accent)',Site:'var(--purple)'}[i.tier]||'var(--text)';document.getElementById('lstorg').textContent=i.licensee;document.getElementById('lstdays').textContent=Math.max(0,i.days_remaining);document.getElementById('lhw').textContent=i.hardware_id||'—';const icons={mobile_logical:'📱',mobile_brom:'⚡',sdcard_image:'💾',sdcard_carve:'🔎',disk_dd:'🖴',disk_e01:'📦',disk_carve:'🔍',whatsapp:'💬',money_flow:'💸',timeline:'📅',link_graph:'🕸',yara:'🎯',reports:'📄',csm:'🔗',calendar:'🗓',cartography:'🗺',filters:'🔎',reports_gen:'📄',multi_seat:'🌐',api_access:'🔌'};const g=document.getElementById('modgrid');g.innerHTML=mods().map(m=>{const h=i.modules.includes(m.id);return`<div class="mi"><div class="mi-ico">${icons[m.id]||'🔧'}</div><div><div class="mn">${m.name}</div><div class="md">${m.description}</div></div><div class="mlck">${h?'<span style="color:var(--success)">✓</span>':'🔒'}</div></div>`}).join('')}
+function selTier(t){['tcstd','tcpro','tcsite'].forEach(id=>document.getElementById(id)?.classList.remove('s-std','s-pro','s-site'));const m={Standard:'tcstd',Pro:'tcpro',Site:'tcsite'};const c={Standard:'s-std',Pro:'s-pro',Site:'s-site'};document.getElementById(m[t])?.classList.add(c[t]);document.getElementById('actr').value=t}
+async function activateLicense(){const k=document.getElementById('ack').value.trim(),t=document.getElementById('actr').value,org=document.getElementById('acorg').value.trim(),op=document.getElementById('acop').value.trim(),ex=document.getElementById('acexp').value;if(!k||!org||!op||!ex){toast('Remplissez tout','err');return}const exIso=new Date(ex+'T23:59:59Z').toISOString();log('acc',`Activation ${t}: ${org}`);try{const i=await invoke('activate_license',{key:k,tier:t,licensee:org,operator_name:op,expires_at:exIso,app_dir:await appDir()});S.license=i;updateLic(i);toast(`Licence ${t} activée!`,'ok');log('ok',`${i.modules.length} modules`);loadLic()}catch(e){toast('Échec: '+e,'err');log('err',e)}}
+async function loadCases(){try{const c=await invoke('list_cases',{});S.cases=c||[];renderCB('cb',S.cases);renderCB('dcb',S.cases.slice(0,5));document.getElementById('scases').textContent=S.cases.length;document.getElementById('bcases').textContent=S.cases.filter(c2=>c2.status==='OUVERT').length}catch(e){}}
+function renderCB(tid,cases){const tb=document.getElementById(tid);if(!cases.length){tb.innerHTML='<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucun dossier.</td></tr>';return}tb.innerHTML=cases.map(c=>`<tr><td class="mono">${esc(c.reference)}</td><td style="font-weight:500">${esc(c.name)}</td><td>${esc(c.operator)}</td><td class="mono">${new Date(c.created_at).toLocaleDateString('fr-FR')}</td><td><span class="pill ${c.status==='OUVERT'?'pill-green':c.status==='ARCHIVE'?'pill-muted':'pill-red'}">${c.status}</span></td><td><button class="btn btn-ghost btn-sm" onclick="setCase('${c.id}','${esc(c.name)}')">Sélectionner</button>${c.id?`<button class="btn btn-blue btn-sm" onclick="exportCoC('${c.id}')">📄</button>`:''}</td></tr>`).join('')}
+function openCaseModal(){openModal('modal-case');document.getElementById('cop').value=S.operator}
+function closeCaseModal(){closeModal('modal-case')}
+async function createCase(){const n=document.getElementById('cn').value.trim(),r=document.getElementById('cr').value.trim(),o=document.getElementById('cop').value.trim(),nt=document.getElementById('cno').value.trim();if(!n||!r){toast('Nom + référence requis','err');return}log('acc',`Création: ${r}`);try{const c=await invoke('create_case',{name:n,reference:r,operator_name:o,notes:nt});await invoke('log_action',{operator:o,action:'CREATE_CASE',target:n,case_id:c.id});closeModal('modal-case');toast(`Dossier: ${n}`,'ok');log('ok',c.id);await loadCases();['cn','cr','cno'].forEach(id=>document.getElementById(id).value='')}catch(e){toast('Erreur','err');log('err',e)}}
+function setCase(id,name){S.activeCaseId=id;toast(`Dossier actif: ${name}`,'ok');log('inf',id)}
+async function exportCoC(cid){const dir=document.getElementById('sed')?.value||'C:\\FIDO-LABS\\Exports';const p=`${dir}\\custody_${cid||'all'}.txt`;try{const r=await invoke('export_chain_of_custody',{case_id:cid||S.activeCaseId,output_path:p});toast(r,'ok');log('ok',r)}catch(e){toast('Échec','err');log('err',e)}}
+let curDev=null;
+async function detectDevice(){log('inf','Scan USB...');try{const devs=await invoke('list_usb_devices',{});renderUSB(devs||[]);const p=await invoke('detect_device',{});if(p){curDev=p;document.getElementById('dn').textContent=`${p.brand} ${p.model}`;const sm={ON:['st-on','● EN LIGNE'],OFF:['st-off','○ ÉTEINT'],LOCKED:['st-locked','🔒 VERROUILLÉ'],BROKEN_SCREEN:['st-broken','💥 CASSÉ']};const[c,t]=sm[p.state]||['st-off',p.state];document.getElementById('dsb').className='dstate '+c;document.getElementById('dsb').textContent=t;document.getElementById('ibrand').textContent=p.brand;document.getElementById('ichip').textContent=p.chipset;document.getElementById('iandroid').textContent=p.android_version;document.getElementById('iserial').textContent=`${p.serial} / ${p.imei||'—'}`;document.getElementById('imethod').textContent=p.extraction_method;document.getElementById('ivid').textContent='—';document.getElementById('sdev').textContent=(parseInt(document.getElementById('sdev').textContent)||0)+1;log('ok',`${p.brand} ${p.model} (${p.state})`)}else{log('wrn','Aucun appareil')}}catch(e){log('err',e)}}
+function renderUSB(devs){const el=document.getElementById('usbl');if(!devs.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px 0;">Aucun appareil.</div>';return}const tc={ADB:'pill-green',BROM_MTK:'pill-warn',EDL_QUALCOMM:'pill-warn',FASTBOOT_QUALCOMM:'pill-blue',iOS:'pill-purple',SAMSUNG:'pill-blue',XIAOMI:'pill-blue',ADB_UNAUTHORIZED:'pill-red'};el.innerHTML=devs.map(d=>`<div class="ui"><div class="ui-ico">${d.detected_type==='iOS'?'🍎':d.detected_type.includes('BROM')||d.detected_type.includes('EDL')?'⚡':'📱'}</div><div class="ui-info"><div class="ui-n">${esc(d.product||d.manufacturer)}</div><div class="ui-d">VID:${d.vid} PID:${d.pid} | ${d.serial}</div></div><span class="pill ${tc[d.detected_type]||'pill-muted'}">${d.detected_type}</span></div>`).join('')}
+async function extractLogical(){if(!curDev){toast('Aucun appareil','wrn');return}if(!chkMod('mobile_logical'))return;const dir=document.getElementById('scd')?.value||'C:\\FIDO-LABS\\Cases';const outD=`${dir}\\${S.activeCaseId||'no-case'}`;log('acc',`Extraction: ${curDev.serial}`);document.getElementById('estatus').textContent='En cours...';animateBar('epro',0,100,2000);try{const r=await invoke('extract_logical',{case_id:S.activeCaseId||'demo',serial:curDev.serial,output_dir:outD});await invoke('log_action',{operator:S.operator,action:'EXTRACT_LOGICAL',target:curDev.serial,case_id:S.activeCaseId||'demo'});document.getElementById('estatus').textContent=r;toast('Terminé','ok');log('ok',r)}catch(e){toast('Échec: '+e,'err');log('err',e)}}
+async function startSDImage(){if(!chkMod('sdcard_image'))return;const src=document.getElementById('sds').value.trim(),dst=document.getElementById('sdd').value.trim();if(!src||!dst){toast('Source+dest requises','err');return}log('acc',`Image SD: ${src}`);try{const r=await invoke('image_sd',{path:src,dest:dst,case_id:S.activeCaseId||'demo'});await invoke('log_action',{operator:S.operator,action:'SD_IMAGE',target:src,case_id:S.activeCaseId||'demo'});toast('Image créée','ok');log('ok',r)}catch(e){toast('Erreur','err');log('err',e)}}
+async function startCarving(){if(!chkMod('sdcard_carve'))return;const src=document.getElementById('cs').value.trim(),out=document.getElementById('co').value.trim();if(!src||!out){toast('Source+sortie requises','err');return}log('inf',`Carving: ${src}`);try{const r=await invoke('carve_files',{image_path:src,output_dir:out});S.totalFiles=r.total;document.getElementById('sfiles').textContent=r.total;document.getElementById('sdr').style.display='block';document.getElementById('sdrb').innerHTML=`<div style="font-family:var(--mono);color:var(--success);margin-bottom:8px">✓ ${r.total} fichiers → ${out}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(r.stats||{}).map(([k,v])=>`<span class="pill pill-blue">${k}:${v}</span>`).join('')}</div>`;toast(`${r.total} fichiers`,'ok');log('ok',`Carving: ${r.total}`)}catch(e){toast('Erreur','err');log('err',e)}}
+async function listDisks(){log('inf','Énumération disques...');try{const ds=await invoke('list_disks',{});document.getElementById('db').innerHTML=(ds||[]).map(d=>`<tr><td class="mono">${esc(d.path)}</td><td>${esc(d.label)}</td><td class="mono">${d.size_gb.toFixed(1)} GB</td><td>${esc(d.filesystem)}</td><td><span class="pill ${d.removable?'pill-warn':'pill-muted'}">${d.removable?'AMOVIBLE':'FIXE'}</span></td><td><button class="btn btn-ghost btn-sm" onclick="setDisk('${esc(d.path)}')">Sélectionner</button></td></tr>`).join('');log('ok',`${(ds||[]).length} disques`)}catch(e){log('err',e)}}
+function setDisk(p){document.getElementById('dns').value=p}
+async function startDiskImage(){const fmt=document.getElementById('dfmt').value;if(!chkMod(fmt==='E01'?'disk_e01':'disk_dd'))return;const src=document.getElementById('dns').value.trim(),dest=document.getElementById('dnd').value.trim();if(!src||!dest){toast('Source+dest requises','err');return}log('acc',`Image ${fmt}: ${src}`);try{const r=await invoke('create_image',{disk_path:src,dest_path:dest,format:fmt,case_id:S.activeCaseId||'demo'});await invoke('log_action',{operator:S.operator,action:`DISK_${fmt}`,target:src,case_id:S.activeCaseId||'demo'});toast(r,'ok');log('ok',r)}catch(e){toast('Erreur','err');log('err',e)}}
+async function verifyImage(){const p=document.getElementById('vp').value.trim();if(!p){toast('Chemin requis','err');return}try{const r=await invoke('verify_image',{image_path:p});const el=document.getElementById('vr');el.style.color=r.startsWith('✓')?'var(--success)':'var(--danger)';el.textContent=r;toast(r,r.startsWith('✓')?'ok':'err');log(r.startsWith('✓')?'ok':'err',r)}catch(e){log('err',e)}}
+async function parseWhatsApp(){if(!chkMod('whatsapp'))return;const p=document.getElementById('wap').value.trim();if(!p){toast('Chemin requis','err');return}try{const msgs=await invoke('parse_whatsapp_db',{db_path:p,include_deleted:document.getElementById('wad').checked});document.getElementById('wab').innerHTML=(msgs||[]).map(m=>`<tr><td class="mono">${m.id}</td><td class="mono">${new Date(m.timestamp).toLocaleString('fr-FR')}</td><td class="mono" style="color:var(--blue)">${esc(m.from_jid)}</td><td class="mono" style="color:var(--accent)">${esc(m.to_jid)}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.body)}</td><td><span class="pill pill-muted">${['Texte','Image','Vidéo','Audio','Doc'][m.media_type]||m.media_type}</span></td><td>${m.deleted?'<span class="pill pill-red">SUPPRIMÉ</span>':'<span class="pill pill-green">OK</span>'}</td></tr>`).join('');document.getElementById('waw').style.display='block';toast(`${(msgs||[]).length} messages`,'ok');log('ok',`WhatsApp: ${(msgs||[]).length}`)}catch(e){toast('Erreur','err');log('err',e)}}
+async function parseMoney(){if(!chkMod('money_flow'))return;const p=document.getElementById('mp').value.trim(),pr=document.getElementById('mpr').value;if(!p){toast('Chemin requis','err');return}log('inf',`Money: ${p}`);try{const txs=await invoke('parse_mobile_money',{sms_db_path:p,provider_filter:pr});const recu=(txs||[]).filter(t=>t.type_tx==='RECU').reduce((s,t)=>s+t.montant,0);const env=(txs||[]).filter(t=>t.type_tx==='ENVOYE').reduce((s,t)=>s+t.montant,0);document.getElementById('mrec').textContent=recu.toLocaleString('fr-FR');document.getElementById('menv').textContent=env.toLocaleString('fr-FR');document.getElementById('mcnt').textContent=(txs||[]).length;document.getElementById('stx').textContent=(txs||[]).length;const gr=await invoke('analyze_money_flow',{transactions:txs||[]});document.getElementById('msus').textContent=gr?.suspicious_nodes||0;document.getElementById('mst').style.display='block';document.getElementById('mb').innerHTML=(txs||[]).map(t=>`<tr><td class="mono">${new Date(t.date).toLocaleString('fr-FR')}</td><td><span class="pill ${t.provider==='ORANGE'?'pill-warn':t.provider==='WAVE'?'pill-blue':'pill-muted'}">${t.provider}</span></td><td><span class="pill ${t.type_tx==='RECU'?'pill-green':t.type_tx==='ENVOYE'?'pill-red':'pill-blue'}">${t.type_tx}</span></td><td class="mono" style="font-weight:600">${t.montant.toLocaleString('fr-FR')} <small style="color:var(--muted)">${t.currency}</small></td><td class="mono">${esc(t.from_num)}</td><td class="mono">${esc(t.to_num)}</td><td class="mono" style="color:var(--muted)">${t.balance_after>=0?t.balance_after.toLocaleString('fr-FR'):'—'}</td><td class="mono" style="font-size:10px;color:var(--faint)">${esc(t.reference)}</td></tr>`).join('');document.getElementById('mtw').style.display='block';toast(`${(txs||[]).length} transactions`,'ok');log('ok',`Money: ${(txs||[]).length} tx`)}catch(e){toast('Erreur','err');log('err',e)}}
+async function buildTimeline(){if(!chkMod('timeline'))return;const cid=document.getElementById('tlcs').value;log('inf','Timeline...');try{await invoke('build_timeline',{case_id:cid});const ev=await invoke('get_timeline_events',{case_id:cid,limit:200});const l=document.getElementById('tl');if(!ev||!ev.length){l.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucun événement.</div>';return}const sc={WHATSAPP:'var(--success)',MONEY:'var(--warn)',MOBILE_ADB:'var(--blue)',SMS:'var(--purple)'};l.innerHTML=ev.map((e,i)=>`<div class="tli"><div class="tl-dc"><div class="tl-dot" style="background:${sc[e.source]||'var(--faint)'}"></div>${i<ev.length-1?'<div class="tl-line"></div>':''}</div><div class="tl-bd"><div class="tl-ts">${new Date(e.timestamp).toLocaleString('fr-FR')} <span class="pill pill-muted" style="padding:1px 6px;font-size:9px">${e.source}</span></div><div class="tl-desc">${esc(e.description)}</div><div class="tl-act">${esc(e.actor)} → ${esc(e.target)} | ${esc(e.evidence_path)}</div></div></div>`).join('');toast(`${ev.length} événements`,'ok');log('ok',`Timeline: ${ev.length}`)}catch(e){toast('Erreur','err');log('err',e)}}
+function loadTlSel(){const s=document.getElementById('tlcs');s.innerHTML='<option value="">— Tous —</option>';S.cases.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=`${c.reference} — ${c.name}`;s.appendChild(o)})}
+async function loadAudit(){try{const e=await invoke('get_audit_log',{case_id:S.activeCaseId||''});document.getElementById('ab').innerHTML=(e||[]).map(x=>`<tr><td class="mono">${new Date(x.timestamp).toLocaleString('fr-FR')}</td><td>${esc(x.operator)}</td><td style="color:var(--accent)">${esc(x.action)}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.target)}</td><td class="mono" style="font-size:10px;color:var(--faint)">${x.hash}</td><td class="mono" style="font-size:11px">${esc(x.case_id)}</td></tr>`).join('')||'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Journal vide.</td></tr>'}catch(e){log('err',e)}}
+function saveSettings(){S.operator=document.getElementById('sop')?.value||S.operator;toast('Sauvegardé','ok');try{localStorage.setItem('fido_settings',JSON.stringify({operator:S.operator}))}catch(e){}}
+
+// ── CALENDAR ──
+async function loadCalendar(){const w=document.getElementById('cal-week').value;const cid=document.getElementById('cal-case').value;if(!w){toast('Date de début requise','err');return}log('inf',`Calendrier: semaine ${w}`);try{const events=await invoke('get_events',{case_id:cid,date_from:w,date_to:addDays(w,7)});S.calendarEvents=events;renderCalendar(w,events);renderUpcoming(events);renderWeeklySummary(w,events)}catch(e){toast('Erreur','err');log('err',e)}}
+function renderCalendar(weekStart,events){document.getElementById('cal-week-title').textContent='Semaine du '+weekStart;const grid=document.getElementById('cal-grid');grid.innerHTML='';const days=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];const today=new Date().toISOString().slice(0,10);for(let i=0;i<7;i++){const d=new Date(weekStart);d.setDate(d.getDate()+i);const dateStr=d.toISOString().slice(0,10);const dayEvents=events.filter(e=>String(e.start).startsWith(dateStr));let cells=`<div class="cal-cell ${dateStr===today?'today':''}"><div class="n">${d.getDate()} ${days[i]}</div>`;dayEvents.forEach(ev=>{cells+=`<div class="ev" title="${esc(ev.title)}">${esc(ev.title)}</div>`});cells+='</div>';grid.innerHTML+=cells}}
+function renderUpcoming(events){const el=document.getElementById('cal-upcoming');const sorted=[...events].sort((a,b)=>a.start.localeCompare(b.start)).slice(0,5);el.innerHTML=sorted.length?sorted.map(e=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="font-weight:500">${esc(e.title)}</div><div style="font-size:10.5px;color:var(--muted);font-family:var(--mono)">${new Date(e.start).toLocaleString('fr-FR')} — ${esc(e.location||'—')}</div></div>`).join(''):'<div style="color:var(--muted);font-size:12px">Aucun événement</div>'}
+async function renderWeeklySummary(weekStart,events){const sum=await invoke('get_weekly_summary',{date:weekStart,case_id:S.activeCaseId||''});document.getElementById('cal-total').textContent=sum?.total||0;document.getElementById('cal-extr').textContent=sum?.by_category?.extraction||0;document.getElementById('cal-dead').textContent=sum?.by_category?.deadline||0;document.getElementById('cal-over').textContent=sum?.overdue||0}
+function openEventModal(){openModal('modal-evt');const c=document.getElementById('evt-case');c.innerHTML='<option value="">— Tous —</option>';S.cases.forEach(cs=>{const o=document.createElement('option');o.value=cs.id;o.textContent=`${cs.reference} — ${cs.name}`;c.appendChild(o)});document.getElementById('evt-start').value=new Date().toISOString().slice(0,16);document.getElementById('evt-end').value=new Date(Date.now()+3600000).toISOString().slice(0,16)}
+function closeEvt(){closeModal('modal-evt')}
+async function createEvent(){const t=document.getElementById('evt-title').value.trim();if(!t){toast('Titre requis','err');return}const startV=document.getElementById('evt-start').value.replace('T',' ');const endV=document.getElementById('evt-end').value.replace('T',' ');try{await invoke('create_event',{title:t,description:document.getElementById('evt-desc').value,start:startV||new Date().toISOString(),end:endV||new Date(Date.now()+3600000).toISOString(),category:document.getElementById('evt-cat').value,case_id:S.activeCaseId||'',assigned_to:document.getElementById('evt-assign').value,location:document.getElementById('evt-loc').value,priority:document.getElementById('evt-prio').value});await invoke('log_action',{operator:S.operator,action:'CREATE_EVENT',target:t,case_id:S.activeCaseId||''});closeEvt();toast(`Événement: ${t}`,'ok');log('ok',`Événement créé: ${t}`);loadCalendar()}catch(e){toast('Erreur','err');log('err',e)}}
+async function loadTlSel(){const s=document.getElementById('tlcs');s.innerHTML='<option value="">— Tous —</option>';S.cases.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=`${c.reference} — ${c.name}`;s.appendChild(o)})}
+
+// ── CSM ──
+async function loadCSM(){try{const chains=await invoke('get_custody_chains',{case_id:S.activeCaseId||''});S.custodyChains=chains;document.getElementById('csm-body').innerHTML=chains.length?chains.map(c=>`<tr><td class="mono">${c.id.slice(0,12)}</td><td>${esc(c.evidence_id)}</td><td><span class="pill pill-blue">${c.evidence_type}</span></td><td><span class="pill ${c.status==='IN_CUSTODY'?'pill-green':c.status==='ANALYSIS'?'pill-warn':c.status==='ARCHIVED'?'pill-muted':'pill-red'}">${c.status}</span></td><td>${esc(c.current_holder)}</td><td><button class="btn btn-ghost btn-sm" onclick="viewCustody('${c.id}')">👁</button>${c.id?`<button class="btn btn-orange btn-sm" onclick="transferCustody('${c.id}')">↔</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucune chaîne</td></tr>'}catch(e){toast('Erreur','err');log('err',e)}}
+function openCustodyModal(){openModal('modal-csm');document.getElementById('modal-csm').querySelector('h3').textContent='🔗 Nouvelle chaîne';document.getElementById('csm-eid').value=S.activeCaseId?`${S.activeCaseId}-ev`:'ev-001'}
+function closeCSM(){closeModal('modal-csm')}
+async function createCustody(){const eid=document.getElementById('csm-eid').value.trim();if(!eid){toast('ID preuve requis','err');return}log('acc',`CSM: ${eid}`);try{const c=await invoke('create_custody',{case_id:S.activeCaseId||'demo',evidence_id:eid,evidence_type:document.getElementById('csm-type').value,description:document.getElementById('csm-desc').value,hash_sha256:document.getElementById('csm-hash').value,size_bytes:parseInt(document.getElementById('csm-size').value)||0});await invoke('log_action',{operator:S.operator,action:'CREATE_CSM',target:eid,case_id:S.activeCaseId||'demo'});closeCSM();toast(`Chaîne créée: ${eid}`,'ok');log('ok',c.id);loadCSM()}catch(e){toast('Erreur: '+e,'err');log('err',e)}}
+async function viewCustody(id){const c=await invoke('get_custody',{chain_id:id});document.getElementById('csm-detail').style.display='block';document.getElementById('csm-detail-title').textContent=`Preuve: ${c.evidence_id} — ${c.evidence_type}`;document.getElementById('csm-detail-body').innerHTML=`<div class="grid-2" style="margin-bottom:14px"><div class="info-cell"><div class="lbl">Status</div><div class="val"><span class="pill ${c.status==='IN_CUSTODY'?'pill-green':c.status==='ANALYSIS'?'pill-warn':'pill-red'}">${c.status}</span></div></div><div class="info-cell"><div class="lbl">Actuellement</div><div class="val">${esc(c.current_holder)}</div></div><div class="info-cell"><div class="lbl">Hash</div><div class="val" style="font-size:10px">${esc(c.hash_sha256)}</div></div><div class="info-cell"><div class="lbl">Taille</div><div class="val">${c.size_bytes.toLocaleString()} octets</div></div></div><div style="font-size:11px;font-weight:600;margin-bottom:6px">Étapes (${c.steps.length})</div>${c.steps.map(s=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><div style="font-family:var(--mono);font-size:10px;color:var(--faint);min-width:60px">#${s.step_number}</div><div><div style="font-size:12px">${esc(s.action)} — ${esc(s.operator)}</div><div style="font-size:10px;color:var(--muted)">${esc(s.location)} | ${new Date(s.timestamp).toLocaleString('fr-FR')}</div></div></div>`).join('')}`}
+async function transferCustody(id){const nh=prompt&&prompt('Nouveau titulaire:')||'Investigateur';try{await invoke('transfer_custody',{chain_id:id,new_holder:nh,org:'FIDO-LABS',location:'Local'});toast('Transfert effectué','ok');log('ok',`Transfert CSM: ${nh}`);loadCSM()}catch(e){toast('Erreur','err');log('err',e)}}
+async function exportCustodyAll(){const dir=document.getElementById('sed')?.value||'C:\\FIDO-LABS\\Exports';const p=`${dir}\\csm_export.txt`;try{const r=await invoke('export_chain_of_custody',{case_id:S.activeCaseId||'all',output_path:p});toast(r,'ok');log('ok',r)}catch(e){toast('Échec','err');log('err',e)}}
+
+// ── CARTOGRAPHIE ──
+let currentMapId='';
+async function loadCarto(){const list=document.getElementById('carto-list');if(!S.cartoMaps.length){list.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0">Créez une carte pour voir les points</div>';return}list.innerHTML=S.cartoMaps.map(m=>`<div class="ui" style="cursor:pointer" onclick="selectMap('${m.id}')"><div class="ui-ico">🗺</div><div class="ui-info"><div class="ui-n">${esc(m.name)}</div><div class="ui-d">${(m.points||[]).length} points · ${new Date(m.created_at).toLocaleDateString('fr-FR')}</div></div></div>`).join('')}
+function selectMap(id){const m=S.cartoMaps.find(x=>x.id===id);if(m){currentMapId=id;renderMapCanvas(m)}}
+function openMapModal(){openModal('modal-map');document.getElementById('modal-map').querySelector('h3').textContent='🗺 Nouvelle carte'}
+function closeMap(){closeModal('modal-map')}
+async function createMap(){const n=document.getElementById('map-name').value.trim();if(!n){toast('Nom requis','err');return}try{const m=await invoke('create_map',{name:n,case_id:S.activeCaseId||''});currentMapId=m.id;S.cartoMaps.push(m);closeMap();toast(`Carte: ${n}`,'ok');log('ok',m.id);renderMapCanvas(m);loadCarto()}catch(e){toast('Erreur','err');log('err',e)}}
+function renderMapCanvas(map){const canvas=document.getElementById('map-canvas');canvas.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:13px">🗺 Carte: '+esc(map.name)+' — '+map.points.length+' points</div>';map.points.forEach((p,i)=>{const pct={lat:(p.lat+90)/180*100,lon:(p.lon+180)/360*100};const pin=document.createElement('div');pin.className='map-pin';pin.style.left=pct.lon+'%';pin.style.top=pct.lat+'%';pin.style.background=['var(--accent)','var(--blue)','var(--warn)','var(--danger)'][i%4];pin.title=p.label;canvas.appendChild(pin)});log('ok',`Carte: ${map.points.length} points`)}
+async function addGeoPointDemo(){const pts=[{lat:9.0,lon:-7.5,label:'Abidjan',category:'extraction_point',confidence:0.95},{lat:6.3,lon:3.4,label:'Lagos',category:'suspect_location',confidence:0.82},{lat:12.6,lon:-8.0,label:'Conakry',category:'cell_tower',confidence:0.71}];try{for(const p of pts){await invoke('add_geo_point',{map_id:currentMapId||'_test',...p,metadata:{}});S.cartoMaps.find(m=>m.id===currentMapId)?.points.push(p)}renderMapCanvas({name:'Carte active',points:pts,connections:[]});toast('3 points ajoutés','ok');log('ok','Points géolocalisés')}catch(e){toast('Erreur','err');log('err',e)}}
+
+// ── GRAPHES ──
+function renderLinkGraphSVG(){const el=document.getElementById('graph-1');if(!el)return;const nodes=[];for(let i=0;i<8;i++){nodes.push({x:150+Math.cos(i/8*Math.PI*2)*90,y:90+Math.sin(i/8*Math.PI*2)*70,label:'N'+i,color:'var(--accent)',r:14})}let edges='';for(let i=0;i<nodes.length;i++){for(let j=i+1;j<nodes.length;j++){if(Math.random()>.5){edges+=`<line x1="${nodes[i].x}" y1="${nodes[i].y}" x2="${nodes[j].x}" y2="${nodes[j].y}" stroke="var(--border2)" stroke-width="1" opacity="0.6"/>`}}let s='';nodes.forEach(n=>{s+=`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${n.color}" opacity="0.85" style="cursor:pointer"/><text x="${n.x}" y="${n.y+4}" text-anchor="middle" fill="#0a0c12" font-size="10" font-weight="700">${n.label}</text>`});el.innerHTML=`<svg width="100%" height="100%" viewBox="0 0 300 180" style="background:var(--surface2);border-radius:8px">${edges}${s}</svg>`}
+function renderMoneyFlowSVG(){const el=document.getElementById('graph-2');if(!el)return;const cx=150,cy=90;const nodes=[{x:cx,y:cy,r:22,label:'Centre',color:'var(--accent)'},{x:50,y:50,r:14,label:'A',color:'var(--orange)'},{x:250,y:50,r:14,label:'B',color:'var(--warn)'},{x:50,y:140,r:14,label:'C',color:'var(--blue)'},{x:250,y:140,r:14,label:'D',color:'var(--purple)'}];let edges='';[[0,1,80000],[0,2,45000],[0,3,120000],[0,4,30000],[1,4,15000],[2,3,22000]].forEach(([a,b,amt])=>{edges+=`<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="var(--orange)" stroke-width="${Math.max(1,amt/30000)}" opacity="0.5"/>`});let s='';nodes.forEach(n=>{s+=`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${n.color}" opacity="0.85" style="cursor:pointer"/><text x="${n.x}" y="${n.y+4}" text-anchor="middle" fill="#0a0c12" font-size="9" font-weight="700">${n.label}</text>`});el.innerHTML=`<svg width="100%" height="100%" viewBox="0 0 300 180" style="background:var(--surface2);border-radius:8px">${edges}${s}</svg>`}
+function renderHeatmapSVG(){const el=document.getElementById('graph-3');if(!el)return;let html='<svg width="100%" height="100%" viewBox="0 0 300 180" style="background:var(--surface2);border-radius:8px">';for(let r=0;r<7;r++){for(let c=0;c<24;c++){const intensity=Math.random();const colors=['var(--surface2)','var(--accent)','var(--blue)','var(--warn)','var(--danger)'];const color=colors[Math.min(4,Math.floor(intensity*5))];const opacity=0.2+intensity*0.8;html+=`<rect x="${c*12+4}" y="${r*22+4}" width="11" height="19" fill="${color}" opacity="${opacity}" rx="1"/>`}}html+='</svg>';el.innerHTML=html}
+async function buildLinkGraph(){renderLinkGraphSVG();renderMoneyFlowSVG();renderHeatmapSVG();const anomalies=await invoke('analyze_money_flow',{transactions:[]});document.getElementById('graph-anomalies').innerHTML=`✓ <span style="color:var(--success)">${anomalies?.suspicious_nodes||0} anomalies détectées</span> — Vérifiez les nœuds suspects dans le Money Flow`;log('ok','Graphes générés')}
+
+// ── FILTRES ──
+async function loadFilters(){try{const filters=await invoke('list_filters',{case_id:S.activeCaseId||''});S.filters=filters;renderFilters();renderFilterChips()}catch(e){toast('Erreur','err');log('err',e)}}
+function renderFilters(){const tb=document.getElementById('filter-body');if(!S.filters.length){tb.innerHTML='<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Aucun filtre</td></tr>';return}tb.innerHTML=S.filters.map(f=>`<tr><td style="font-weight:600">${esc(f.name)}</td><td><span class="pill pill-blue">${(f.categories||[]).join(', ')||'—'}</span></td><td style="font-size:11px;font-family:var(--mono)">${(f.keywords||[]).join(', ')||'—'}</td><td class="mono" style="font-size:11px">${f.date_from||'—'} → ${f.date_to||'—'}</td><td><button class="btn btn-accent btn-sm" onclick="applyFilter('${f.id}')">▶</button></td><td><button class="btn btn-ghost btn-sm" onclick="showInfo('Filtre: ${esc(f.name)}')">⚙</button></td></tr>`).join('')}
+function renderFilterChips(){const el=document.getElementById('filter-chips');if(!S.filters.length){el.innerHTML='<div style="color:var(--muted);font-size:12px">Aucun filtre actif</div>';return}el.innerHTML=S.filters.map(f=>`<span class="flt-chip">${esc(f.name)}<span class="x" onclick="removeFilter('${f.id}')">×</span></span>`).join('')}
+function openFilterModal(){openModal('modal-flt');document.getElementById('modal-flt').querySelector('h3').textContent='🔎 Nouveau filtre'}
+function closeFlt(){closeModal('modal-flt')}
+async function createFilter(){const n=document.getElementById('flt-name').value.trim();if(!n){toast('Nom requis','err');return}const cat=document.getElementById('flt-cat').value.split(',').map(s=>s.trim()).filter(Boolean);const kw=document.getElementById('flt-kw').value.split(',').map(s=>s.trim()).filter(Boolean);try{const f=await invoke('create_filter',{name:n,date_from:document.getElementById('flt-from').value||null,date_to:document.getElementById('flt-to').value||null,operators:[],device_ids:[],categories:cat,severity:['NORMAL'],keywords:kw,exclude_deleted:false,case_id:S.activeCaseId||''});await invoke('log_action',{operator:S.operator,action:'CREATE_FILTER',target:n,case_id:S.activeCaseId||''});closeFlt();toast(`Filtre: ${n}`,'ok');log('ok',f.id);S.filters.push(f);renderFilters();renderFilterChips()}catch(e){toast('Erreur: '+e,'err');log('err',e)}}
+async function applyFilter(id){try{const r=await invoke('apply_filter',{filter_id:id});document.getElementById('filter-results').style.display='block';document.getElementById('filter-results-title').textContent=`Résultats: ${r.total_matched} correspondances (${r.execution_time_ms}ms)`;document.getElementById('filter-results-body').innerHTML=r.total_matched?`<div style="font-family:var(--mono);font-size:12px;color:var(--success)">✓ ${r.total_matched} éléments trouvés</div><div style="color:var(--muted);font-size:11px;margin-top:6px">Aperçu des 10 premiers: ...</div>`:`<div style="color:var(--muted)">Aucun résultat.</div>`;toast(`${r.total_matched} résultats`,'ok');log('ok',`Filter: ${r.total_matched}`)}catch(e){toast('Erreur','err');log('err',e)}}
+
+// ── RAPPORTS ──
+async function loadReports(){try{const tmplts=await invoke('get_available_templates',{});const tl=document.getElementById('report-templates');tl.innerHTML=tmplts.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="selectTemplate('${t.id}','${t.name}')"><span style="font-size:20px">📄</span><div><div style="font-weight:600;font-size:12px">${esc(t.name)}</div><div style="font-size:10px;color:var(--muted)">${esc(t.description)}</div></div></div>`).join('');const reports=await invoke('list_reports',{case_id:S.activeCaseId||''});S.reports=reports;renderReports()}catch(e){toast('Erreur','err');log('err',e)}}
+function renderReports(){const el=document.getElementById('report-list');if(!S.reports.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucun rapport généré</div>';return}el.innerHTML=S.reports.map(r=>`<div class="rpt-card"><div class="rpt-ico">${r.signed?'✓':'📄'}</div><div class="rpt-info"><div class="rpt-name">${esc(r.name)}</div><div class="rpt-meta">${r.report_type} · ${r.format} · ${new Date(r.created_at).toLocaleDateString('fr-FR')}${r.signed?' · SIGNÉ':''}</div></div><div><span class="pill ${r.signed?'pill-green':'pill-warn'}">${r.signed?'VALIDÉ':'EN ATTENTE'}</span>${r.id?`<button class="btn btn-blue btn-sm" onclick="showInfo('Ouvrir: ${esc(r.name)}')">Ouvrir</button>`:''}</div></div>`).join('')}
+function selectTemplate(id,name){openReportModal();document.getElementById('rpt-name').value=name}
+function openReportModal(){openModal('modal-rpt');document.getElementById('modal-rpt').querySelector('h3').textContent='📄 Générer rapport'}
+function closeRpt(){closeModal('modal-rpt')}
+async function generateReport(){const n=document.getElementById('rpt-name').value.trim();if(!n){toast('Nom requis','err');return}log('acc',`Rapport: ${n}`);try{const r=await invoke('generate_report',{name:n,report_type:document.getElementById('rpt-type').value,format:document.getElementById('rpt-format').value,case_id:S.activeCaseId||'',author:S.operator,filters_json:document.getElementById('rpt-filters').value});await invoke('log_action',{operator:S.operator,action:'GENERATE_REPORT',target:n,case_id:S.activeCaseId||''});closeRpt();toast(`Rapport généré: ${n}`,'ok');log('ok',r.id);S.reports.push(r);renderReports()}catch(e){toast('Erreur: '+e,'err');log('err',e)}}
+function animateBar(id,from,to,dur){const el=document.getElementById(id);if(!el)return;const start=performance.now();function step(now){const p=Math.min((now-start)/dur,1);el.style.width=(from+(to-from)*p)+'%';if(p<1)requestAnimationFrame(step)}requestAnimationFrame(step)}
+document.addEventListener('DOMContentLoaded',async function(){log('inf','FIDO-LABS v3.0 — Démarrage...');try{const saved=JSON.parse(localStorage.getItem('fido_settings')||'{}');if(saved.operator){S.operator=saved.operator;document.getElementById('sop').value=saved.operator}}catch(e){}const next=new Date();next.setFullYear(next.getFullYear()+1);document.getElementById('acexp').value=next.toISOString().slice(0,10);document.getElementById('cal-week').value=new Date().toISOString().slice(0,10).replace(/-/g,'/');try{const lic=await invoke('get_license_status',{app_dir:await appDir()});if(lic){S.license=lic;updateLic(lic)}}catch(e){}await loadCases();log('ok',`Licence: ${S.license.tier} — Modules: ${S.license.modules.length}`);log('acc','FIDO-LABS v3.0 prêt.')});
+</script>
+</body>
+</html>

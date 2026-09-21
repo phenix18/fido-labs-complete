@@ -1,0 +1,34 @@
+# Rust / Cargo
+target/
+**/target/
+*.pdb
+
+# Node
+node_modules/
+dist/
+
+# Tauri generated
+src-tauri/gen/
+**/gen/schemas/
+
+# Forensic outputs / evidence (never commit case data)
+*.dd
+*.E01
+*.img
+*.manifest.txt
+exports/
+reports/*.pdf
+Exports/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Backups
+*.bak
+*.bck_before_fix
+*.v2.bak
+index.html.bak

@@ -1,0 +1,44 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/configSchema.json",
+  "productName": "fido-labs-complete",
+  "version": "0.1.0",
+  "identifier": "com.fido-labs.forensic",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "frontendDist": "../"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 900,
+        "resizable": true,
+        "title": "FIDO-LABS v3 — Forensic Tool",
+        "width": 1280,
+        "minWidth": 960,
+        "minHeight": 640,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Productivity",
+    "copyright": "© 2024 FIDO-LABS",
+    "externalBin": [],
+    "icon": [
+      "icons/icon.svg",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "longDescription": "FIDO-LABS v3 — Forensic Integrated Data Operator. Extraction et analyse forensique numérique locale.",
+    "resources": [],
+    "shortDescription": "Forensic Extraction & Analysis — v3",
+    "targets": "all"
+  }
+}
