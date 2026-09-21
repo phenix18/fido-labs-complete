@@ -13,22 +13,27 @@ pub fn enumerate_disks() -> Result<Vec<DiskInfo>, String> {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        // Utiliser wmic pour lister les disques
-        if let Ok(out) = Command::new("wmic")
-            .args(["diskdrive", "get", "DeviceID,Size,MediaType,Model", "/format:csv"])
+        // wmic est absent des Windows 11 récents → on interroge CIM via PowerShell.
+        let ps = "Get-CimInstance Win32_DiskDrive | ForEach-Object { \"$($_.DeviceID)|$($_.Model)|$($_.Size)|$($_.MediaType)|$($_.InterfaceType)\" }";
+        if let Ok(out) = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
             .output()
         {
             let txt = String::from_utf8_lossy(&out.stdout);
-            for line in txt.lines().skip(2) {
-                let cols: Vec<&str> = line.split(',').collect();
-                if cols.len() >= 4 {
+            for line in txt.lines() {
+                let cols: Vec<&str> = line.trim().split('|').collect();
+                if cols.len() >= 5 {
                     let size_bytes: u64 = cols[2].trim().parse().unwrap_or(0);
+                    let iface = cols[4].to_lowercase();
+                    let media = cols[3].to_lowercase();
                     disks.push(DiskInfo {
-                        path: cols[1].trim().to_string(),
-                        label: cols[3].trim().to_string(),
+                        path: cols[0].trim().to_string(),
+                        label: cols[1].trim().to_string(),
                         size_gb: size_bytes as f64 / 1e9,
-                        filesystem: cols[2].trim().to_string(),
-                        removable: cols[2].to_lowercase().contains("external") || cols[2].to_lowercase().contains("usb"),
+                        filesystem: cols[3].trim().to_string(),
+                        removable: iface.contains("usb")
+                            || media.contains("removable")
+                            || media.contains("external"),
                     });
                 }
             }
@@ -62,17 +67,8 @@ pub fn enumerate_disks() -> Result<Vec<DiskInfo>, String> {
         }
     }
 
-    if disks.is_empty() {
-        // Fallback demo
-        disks.push(DiskInfo {
-            path: "/dev/sdb".into(),
-            label: "Kingston 32GB".into(),
-            size_gb: 32.0,
-            filesystem: "FAT32".into(),
-            removable: true,
-        });
-    }
-
+    // Pas de disque de démonstration : en forensique on ne doit JAMAIS présenter
+    // un support fictif comme réel. Une liste vide = aucun support détecté.
     Ok(disks)
 }
 

@@ -127,10 +127,38 @@ fn adb_dump(serial: &str, args: &[&str]) -> Result<Vec<u8>, String> {
 
 // ─── PARSEURS content-provider (format `Row: N key=val, key=val, ...`) ────────
 
+/// Découpe une ligne `clé=val, clé=val, ...` en champs SANS lookahead
+/// (le crate `regex` ne supporte pas `(?=...)`). On coupe sur `, ` uniquement
+/// quand il est suivi d'un identifiant puis `=` — ainsi une virgule DANS une
+/// valeur (ex. corps de SMS) ne casse pas le champ.
+fn split_kv_fields(rest: &str) -> Vec<&str> {
+    let b = rest.as_bytes();
+    let mut fields = Vec::new();
+    let mut start = 0usize;
+    let mut i = 0usize;
+    while i + 1 < b.len() {
+        if b[i] == b',' && b[i + 1] == b' ' {
+            let mut j = i + 2;
+            let mut ident = false;
+            while j < b.len() && (b[j].is_ascii_alphanumeric() || b[j] == b'_') {
+                ident = true;
+                j += 1;
+            }
+            if ident && j < b.len() && b[j] == b'=' {
+                fields.push(&rest[start..i]);
+                start = i + 2;
+                i = j;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    fields.push(&rest[start..]);
+    fields
+}
+
 /// Découpe la sortie `adb shell content query` en lignes de paires clé=valeur.
-/// La séparation se fait sur `, ` suivi d'un `clé=` (les valeurs peuvent contenir des virgules).
 fn parse_content_rows(text: &str) -> Vec<std::collections::HashMap<String, String>> {
-    let re = regex::Regex::new(r", (?=[A-Za-z_0-9]+=)").unwrap();
     let mut out = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -138,7 +166,7 @@ fn parse_content_rows(text: &str) -> Vec<std::collections::HashMap<String, Strin
         // Retirer le préfixe "Row: <n> "
         let rest = match line.splitn(3, ' ').nth(2) { Some(s) => s, None => continue };
         let mut map = std::collections::HashMap::new();
-        for field in re.split(rest) {
+        for field in split_kv_fields(rest) {
             if let Some(eq) = field.find('=') {
                 let k = field[..eq].trim().to_string();
                 let v = field[eq + 1..].trim().to_string();
@@ -239,6 +267,7 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
         ("Contacts",              "contacts", "contacts.txt",     vec!["shell", "content", "query", "--uri", "content://com.android.contacts/data/phones"]),
         ("Comptes",               "accounts", "accounts.txt",     vec!["shell", "dumpsys", "account"]),
         ("Wi-Fi connus",          "wifi",     "wifi.txt",         vec!["shell", "cmd", "wifi", "list-networks"]),
+        ("Journaux système (logcat)", "log",  "logcat.txt",       vec!["shell", "logcat", "-d", "-v", "time"]),
         ("Inventaire /sdcard + SHA256 (à la source)", "media", "sdcard_inventory_sha256.txt",
                                               vec!["shell", "find", "/sdcard", "-type", "f", "-exec", "sha256sum", "{}", "+"]),
     ];
@@ -434,4 +463,53 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
         "by_category": by_cat,
         "pulled_dirs": pulled_dirs,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sms_parsing_reel() {
+        // Format réel de `adb shell content query --uri content://sms`
+        let raw = "Row: 0 _id=1, thread_id=2, address=+22670123456, date=1710490991000, read=1, type=1, body=Salut, tu es dispo ce soir ?\n\
+                   Row: 1 _id=2, thread_id=2, address=+22670123456, date=1710491102000, type=2, body=Oui vers 20h";
+        let out = parse_sms(raw);
+        assert_eq!(out.len(), 2, "doit parser 2 SMS");
+        assert_eq!(out[0]["contact"].as_str().unwrap(), "+22670123456");
+        assert_eq!(out[0]["direction"].as_str().unwrap(), "Reçu");
+        // la virgule dans le corps ne doit PAS couper le champ
+        assert_eq!(out[0]["body"].as_str().unwrap(), "Salut, tu es dispo ce soir ?");
+        assert_eq!(out[1]["direction"].as_str().unwrap(), "Envoyé");
+        assert_eq!(out[0]["date"].as_str().unwrap(), "2024-03-15 08:23:11");
+    }
+
+    #[test]
+    fn calls_parsing_reel() {
+        let raw = "Row: 0 _id=1, number=+22607654321, date=1710490200000, duration=204, type=2\n\
+                   Row: 1 _id=2, number=+22655000111, date=1710400000000, duration=0, type=3";
+        let out = parse_calls(raw);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0]["number"].as_str().unwrap(), "+22607654321");
+        assert_eq!(out[0]["type"].as_str().unwrap(), "Sortant");
+        assert_eq!(out[0]["duration"].as_str().unwrap(), "3:24");
+        assert_eq!(out[1]["type"].as_str().unwrap(), "Manqué");
+    }
+
+    #[test]
+    fn contacts_parsing_reel() {
+        let raw = "Row: 0 _id=1, display_name=Awa Traoré, data1=+22670123456\n\
+                   Row: 1 _id=2, display_name=Moussa K., data1=+22607654321";
+        let out = parse_contacts(raw);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0]["name"].as_str().unwrap(), "Awa Traoré");
+        assert_eq!(out[0]["number"].as_str().unwrap(), "+22670123456");
+    }
+
+    #[test]
+    fn ignore_lignes_non_row() {
+        let raw = "No result found.\nRow: 0 _id=1, address=+226, date=1710490991000, type=1, body=x";
+        assert_eq!(parse_sms(raw).len(), 1);
+        assert_eq!(parse_sms("").len(), 0);
+    }
 }

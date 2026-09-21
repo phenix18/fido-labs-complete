@@ -13,6 +13,7 @@ mod cartography;
 mod calendar;
 mod filters;
 mod reports;
+mod report_pdf;
 mod settings;
 
 use tauri::Manager;
@@ -91,6 +92,7 @@ fn main() {
             reports::get_report,
             reports::sign_report,
             reports::get_available_templates,
+            report_pdf::generate_pdf_report,
             // === AUDIT ===
             audit::get_audit_log,
             audit::log_action,
