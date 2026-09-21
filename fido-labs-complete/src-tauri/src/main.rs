@@ -23,7 +23,7 @@ fn main() {
 
     tauri::Builder::default()
         .setup(|app| {
-            let app_dir = app.path_resolver().app_data_dir()
+            let app_dir = app.path().app_data_dir()
                 .expect("Impossible de trouver le répertoire app data");
             std::fs::create_dir_all(&app_dir).ok();
             audit::init_audit_db(&app_dir.to_string_lossy()).ok();
@@ -35,6 +35,7 @@ fn main() {
             // === EXTRACTEURS MOBILE ===
             extractors::mobile::detect_device,
             extractors::mobile::extract_logical,
+            extractors::mobile::pull_media,
             extractors::mobile::list_usb_devices,
             extractors::mobile::get_device_info,
             // === MOBILE AVANCÉ ===

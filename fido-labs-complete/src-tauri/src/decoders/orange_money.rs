@@ -116,7 +116,7 @@ fn parse_sms_body(body: &str, provider: &str, date: &str) -> Option<MoneyTx> {
 
                 return Some(MoneyTx {
                     id: Uuid::new_v4().to_string(),
-                    date: date.clone(),
+                    date: date.to_string(),
                     provider: provider.to_string(),
                     type_tx: type_tx.to_string(),
                     montant,

@@ -22,7 +22,7 @@ pub struct UsbDevice {
 }
 
 /// Détecte les appareils USB branchés (ADB + USB raw)
-#[tauri::command]
+/// Helper interne appelé par `mobile::list_usb_devices` (la commande Tauri est dans mod.rs)
 pub fn list_usb_devices() -> Result<Vec<UsbDevice>, String> {
     let mut devices = Vec::new();
 
@@ -118,7 +118,7 @@ fn adb_logical_extraction() -> Result<String, String> {
         .map_err(|_| "ADB non trouvé - installez Android Platform Tools".into())
 }
 
-#[tauri::command]
+/// Helper interne appelé par `mobile::get_device_info` (la commande Tauri est dans mod.rs)
 pub fn get_device_info(serial: String) -> Result<serde_json::Value, String> {
     let props = vec![
         ("ro.product.brand", "brand"),

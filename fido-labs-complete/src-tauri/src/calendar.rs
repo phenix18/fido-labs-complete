@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use chrono::Utc;
 use uuid::Uuid;
-use once_cell::sync::Mutex;
+use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CalendarEvent {

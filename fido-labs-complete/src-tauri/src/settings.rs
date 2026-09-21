@@ -234,7 +234,7 @@ pub struct Tag {
 
 // ─── EXPORT FORMATS ─────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExportFormat {
     PDF, DOCX, HTML, TXT, CSV, JSON, XLSX, XML, ZIP,
 }

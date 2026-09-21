@@ -1,7 +1,7 @@
 // FILTERS MODULE - Filtres avancés multi-critères
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use once_cell::sync::Mutex;
+use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AdvancedFilter {

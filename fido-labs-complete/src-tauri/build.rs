@@ -1,5 +1,7 @@
 // FIDO-LABS build script
 fn main() {
+    tauri_build::build();
+
     #[cfg(target_os = "windows")]
     {
         // Configuration Windows spécifique

@@ -7,7 +7,7 @@ authors = ["FIDO-LABS Team"]
 license = "Proprietary"
 
 [dependencies]
-tauri = { version = "1.6", features = ["shell-open", "dialog-open", "dialog-save", "fs-read-file", "fs-write-file", "fs-read-dir", "path-all", "window-all"] }
+tauri = { version = "2", features = [] }
 rusb = "0.9"
 rusqlite = { version = "0.31", features = ["bundled"] }
 memmap2 = "0.9"
@@ -26,7 +26,7 @@ byteorder = "1.5"
 once_cell = "1.19"
 
 [build-dependencies]
-tauri-build = { version = "1.5", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [profile.release]
 opt-level = 3

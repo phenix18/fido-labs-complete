@@ -1,24 +1,25 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/configSchema.json",
-  "productName": "fido-labs-complete",
-  "version": "0.1.0",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FIDO-LABS",
+  "version": "3.0.0",
   "identifier": "com.fido-labs.forensic",
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": "",
-    "frontendDist": "../"
+    "frontendDist": "../ui"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       {
-        "fullscreen": false,
-        "height": 900,
-        "resizable": true,
+        "label": "main",
         "title": "FIDO-LABS v3 — Forensic Tool",
         "width": 1280,
+        "height": 900,
         "minWidth": 960,
         "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
         "visible": true
       }
     ],
@@ -28,17 +29,17 @@
   },
   "bundle": {
     "active": true,
-    "category": "Productivity",
+    "targets": "all",
+    "category": "Utility",
     "copyright": "© 2024 FIDO-LABS",
-    "externalBin": [],
-    "icon": [
-      "icons/icon.svg",
-      "icons/icon.ico",
-      "icons/icon.png"
-    ],
-    "longDescription": "FIDO-LABS v3 — Forensic Integrated Data Operator. Extraction et analyse forensique numérique locale.",
-    "resources": [],
     "shortDescription": "Forensic Extraction & Analysis — v3",
-    "targets": "all"
+    "longDescription": "FIDO-LABS v3 — Forensic Integrated Data Operator. Extraction et analyse forensique numérique locale.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }
