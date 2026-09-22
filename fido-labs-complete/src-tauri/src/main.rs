@@ -14,6 +14,7 @@ mod calendar;
 mod filters;
 mod reports;
 mod report_pdf;
+mod aleapp;
 mod settings;
 
 use tauri::Manager;
@@ -59,6 +60,7 @@ fn main() {
             decoders::orange_money::parse_mobile_money,
             decoders::file_carver::carve_files,
             decoders::sqlite_recover::recover_deleted_records,
+            aleapp::parse_with_aleapp,
             // === ANALYSEURS ===
             analyzer::timeline::build_timeline,
             analyzer::timeline::get_timeline_events,
