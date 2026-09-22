@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Époque Apple/Mac (2001-01-01) en secondes Unix.
 const APPLE_EPOCH: i64 = 978_307_200;
@@ -373,6 +374,141 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
         "totals": {"sms": sms.len(), "calls": calls.len(), "contacts": contacts.len(),
                    "browser": browser.len(), "accounts": accounts.len(), "locations": locations.len()},
     }))
+}
+
+// ─── ACQUISITION iOS EN DIRECT via libimobiledevice ──────────────────────────
+// Pilote idevice_id / ideviceinfo / idevicebackup2 (suite libimobiledevice) pour
+// détecter un iPhone branché et créer une sauvegarde, puis l'analyser avec
+// analyze_ios_backup. Prérequis Windows : service Apple Mobile Device (usbmuxd),
+// fourni par l'app « Appareils Apple » (Microsoft Store) ou iTunes, + appairage
+// « Se fier » sur l'appareil. Aucun contournement : c'est une sauvegarde autorisée.
+
+fn sanitize_udid(s: &str) -> String {
+    s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+}
+
+/// Localise le dossier des binaires libimobiledevice (env FIDO_IDEVICE_DIR, chemins
+/// candidats, sinon PATH). Un dossier vide = s'appuyer sur le PATH.
+fn resolve_idevice_dir() -> Option<PathBuf> {
+    if let Ok(d) = std::env::var("FIDO_IDEVICE_DIR") {
+        let p = PathBuf::from(&d);
+        if p.join("idevice_id.exe").exists() || p.join("idevice_id").exists() { return Some(p); }
+    }
+    for c in [
+        "E:/fido-labs-complete/fido-labs-complete/tools/libimobiledevice-w64",
+        "tools/libimobiledevice-w64",
+    ] {
+        let p = PathBuf::from(c);
+        if p.join("idevice_id.exe").exists() || p.join("idevice_id").exists() { return Some(p); }
+    }
+    if Command::new("idevice_id").arg("-h").output().is_ok() { return Some(PathBuf::new()); }
+    None
+}
+
+fn idevice_tool(dir: &Path, name: &str) -> PathBuf {
+    if dir.as_os_str().is_empty() { return PathBuf::from(name); }
+    let exe = dir.join(format!("{}.exe", name));
+    if exe.exists() { exe } else { dir.join(name) }
+}
+
+const USBMUXD_HINT: &str = "Service Apple Mobile Device (usbmuxd) indisponible. Installez l'app « Appareils Apple » (Microsoft Store) ou iTunes, branchez l'iPhone via USB et touchez « Se fier à cet ordinateur » sur l'écran de l'appareil.";
+
+/// Détecte les iPhone/iPad branchés (idevice_id -l) + infos (ideviceinfo).
+#[tauri::command]
+pub fn list_ios_devices() -> Result<serde_json::Value, String> {
+    let dir = resolve_idevice_dir()
+        .ok_or_else(|| "libimobiledevice introuvable (tools/libimobiledevice-w64) — définissez FIDO_IDEVICE_DIR.".to_string())?;
+    let out = Command::new(idevice_tool(&dir, "idevice_id")).arg("-l").output()
+        .map_err(|e| format!("Lancement idevice_id échoué: {}", e))?;
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if !out.status.success() || stderr.contains("Unable to retrieve device list") {
+        return Ok(serde_json::json!({ "available": false, "devices": [], "message": USBMUXD_HINT }));
+    }
+
+    let udids: Vec<String> = stdout.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+    let mut devices = Vec::new();
+    for u in &udids {
+        let info = |key: &str| Command::new(idevice_tool(&dir, "ideviceinfo"))
+            .args(["-u", u, "-k", key]).output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        devices.push(serde_json::json!({
+            "udid": u,
+            "name": info("DeviceName"),
+            "product": info("ProductType"),
+            "ios_version": info("ProductVersion"),
+            "imei": info("InternationalMobileEquipmentIdentity"),
+        }));
+    }
+    Ok(serde_json::json!({
+        "available": true, "devices": devices,
+        "message": if udids.is_empty() {
+            "Aucun iPhone/iPad détecté. Branchez l'appareil et touchez « Se fier » à l'écran.".to_string()
+        } else { format!("{} appareil(s) iOS détecté(s)", udids.len()) },
+    }))
+}
+
+fn find_backup_dir(base: &Path) -> Option<PathBuf> {
+    for entry in walkdir::WalkDir::new(base).max_depth(2).into_iter().flatten() {
+        if entry.file_name() == "Manifest.db" {
+            return entry.path().parent().map(|p| p.to_path_buf());
+        }
+    }
+    None
+}
+
+/// Crée une sauvegarde en direct depuis l'iPhone (idevicebackup2), puis l'analyse.
+/// Peut être long (plusieurs Go). Nécessite usbmuxd + appareil appairé (« Se fier »).
+#[tauri::command]
+pub fn create_ios_backup(case_id: String, udid: String, output_dir: String) -> Result<serde_json::Value, String> {
+    let dir = resolve_idevice_dir()
+        .ok_or_else(|| "libimobiledevice introuvable (tools/libimobiledevice-w64) — définissez FIDO_IDEVICE_DIR.".to_string())?;
+
+    let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let base = format!("{}/ios_live_{}_{}", output_dir.trim_end_matches(|c| c == '/' || c == '\\'), sanitize_udid(&case_id), ts);
+    std::fs::create_dir_all(&base).map_err(|e| format!("Création {}: {}", base, e))?;
+
+    let mut args: Vec<String> = Vec::new();
+    if !udid.trim().is_empty() { args.push("-u".into()); args.push(udid.trim().to_string()); }
+    args.push("backup".into());
+    args.push(base.clone());
+
+    let out = Command::new(idevice_tool(&dir, "idevicebackup2")).args(&args).output()
+        .map_err(|e| format!("Lancement idevicebackup2 échoué: {}", e))?;
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    std::fs::write(format!("{}/idevicebackup2_log.txt", base),
+        format!("$ idevicebackup2 {}\n\n=== STDOUT ===\n{}\n=== STDERR ===\n{}", args.join(" "), stdout, stderr)).ok();
+
+    // Localiser la sauvegarde produite (dossier contenant Manifest.db)
+    let backup_dir = match find_backup_dir(Path::new(&base)) {
+        Some(d) => d,
+        None => {
+            let hint = if stderr.contains("Unable to retrieve device list") || stderr.contains("No device found") {
+                USBMUXD_HINT
+            } else if stderr.contains("pair") || stderr.contains("Trust") || stderr.contains("Please accept") {
+                "Appairage requis : touchez « Se fier à cet ordinateur » sur l'iPhone, puis relancez."
+            } else {
+                "La sauvegarde n'a pas abouti (voir idevicebackup2_log.txt)."
+            };
+            let n = stderr.chars().count();
+            let tail: String = stderr.chars().skip(n.saturating_sub(600)).collect();
+            return Ok(serde_json::json!({
+                "success": false, "output_dir": base,
+                "summary": hint, "log": tail,
+            }));
+        }
+    };
+
+    // Analyser la sauvegarde produite (même pipeline que l'import iTunes/Finder)
+    let mut parsed = analyze_ios_backup(case_id, backup_dir.to_string_lossy().to_string(), output_dir)?;
+    if let Some(obj) = parsed.as_object_mut() {
+        obj.insert("acquisition".into(), serde_json::json!("LIVE_IDEVICEBACKUP2"));
+        obj.insert("live_backup_dir".into(), serde_json::json!(backup_dir.to_string_lossy()));
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]

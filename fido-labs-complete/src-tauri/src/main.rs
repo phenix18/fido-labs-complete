@@ -50,6 +50,8 @@ fn main() {
             extractors::mobile::advanced::extract_physical_mtk,
             extractors::mobile::advanced::extract_physical_edl,
             extractors::mobile::ios::analyze_ios_backup,
+            extractors::mobile::ios::list_ios_devices,
+            extractors::mobile::ios::create_ios_backup,
             // === SD CARD ===
             extractors::sdcard::image_sd,
             extractors::sdcard::carve_sd_card,
