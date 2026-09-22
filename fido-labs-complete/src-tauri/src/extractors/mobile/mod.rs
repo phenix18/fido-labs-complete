@@ -407,6 +407,8 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
 
     // Hacher tous les fichiers récupérés
     let mut files = Vec::new();
+    // Aperçu galerie (UI) : les 150 premières images, avec leur empreinte
+    let mut images: Vec<serde_json::Value> = Vec::new();
     let mut total_bytes = 0u64;
     let mut by_cat: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for entry in walkdir::WalkDir::new(&base).into_iter().flatten() {
@@ -423,12 +425,20 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
                 size += n as u64;
             }
             total_bytes += size;
+            let sha256 = hex::encode(hasher.finalize());
             let cat = categorize(p);
             *by_cat.entry(cat.clone()).or_insert(0) += 1;
+            if cat == "Images" && images.len() < 150 {
+                images.push(serde_json::json!({
+                    "path": p.to_string_lossy(),
+                    "size": size,
+                    "sha256": sha256,
+                }));
+            }
             files.push(serde_json::json!({
                 "path": p.to_string_lossy(),
                 "size": size,
-                "sha256": hex::encode(hasher.finalize()),
+                "sha256": sha256,
                 "category": cat,
             }));
         }
@@ -462,6 +472,7 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
         "total_bytes": total_bytes,
         "by_category": by_cat,
         "pulled_dirs": pulled_dirs,
+        "images": images,
     }))
 }
 

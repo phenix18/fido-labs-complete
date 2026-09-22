@@ -7,7 +7,7 @@ authors = ["FIDO-LABS Team"]
 license = "Proprietary"
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 rusb = "0.9"
 rusqlite = { version = "0.31", features = ["bundled"] }
 memmap2 = "0.9"
@@ -28,6 +28,11 @@ printpdf = "0.7"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+# Build debug allégé en mémoire (machine 7.5 Go) : pas d'infos de débogage lourdes
+[profile.dev]
+debug = 0
+incremental = false
 
 [profile.release]
 opt-level = 3
