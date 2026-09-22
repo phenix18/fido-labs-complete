@@ -658,7 +658,7 @@ function addDays(dateStr, days){
     return d.toISOString().slice(0,10);
 }
 
-const S={currentPage:'dashboard',license:{tier:'Demo',valid:true,days_remaining:7,modules:['mobile_logical','sdcard_image','sdcard_carve','disk_dd','whatsapp','reports','csm','calendar','cartography','filters','reports_gen'],licensee:'Mode Démo',operator_name:'Investigateur',hardware_id:'DEMO-HW-0000',expires_at:''},cases:[],operator:'Investigateur FIDO-LABS',activeCaseId:'',devices:[],totalFiles:0,totalTx:0,calendarEvents:[],custodyChains:[],cartoMaps:[],filters:[],reports:[]};
+const S={currentPage:'dashboard',license:{tier:'Demo',valid:true,days_remaining:7,modules:['mobile_logical','mobile_brom','sdcard_image','sdcard_carve','disk_dd','disk_e01','disk_carve','whatsapp','money_flow','timeline','link_graph','yara','reports','multi_seat','api_access','csm','calendar','cartography','filters','reports_gen'],licensee:'Mode Démo',operator_name:'Investigateur',hardware_id:'DEMO-HW-0000',expires_at:''},cases:[],operator:'Investigateur FIDO-LABS',activeCaseId:'',devices:[],totalFiles:0,totalTx:0,calendarEvents:[],custodyChains:[],cartoMaps:[],filters:[],reports:[]};
 function _toCamel(s){return s.replace(/_([a-z0-9])/g,(_,c)=>c.toUpperCase());}
 function _camelKeys(o){if(o===null||typeof o!=='object'||Array.isArray(o))return o;const r={};for(const k in o){r[_toCamel(k)]=o[k];}return r;}
 async function invoke(cmd,args={}){

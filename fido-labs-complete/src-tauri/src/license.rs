@@ -194,7 +194,9 @@ pub fn get_license_status(app_dir: String) -> Result<LicenseInfo, String> {
             Ok(info)
         }
         None => {
-            // Mode démo: 7 jours, modules Standard
+            // Mode démo: showcase complet 7 jours (tous les modules débloqués pour
+            // évaluation). Les paliers réels Standard/Pro/Site restent définis dans
+            // all_modules() ; seule la démo ouvre tout temporairement.
             Ok(LicenseInfo {
                 key: "DEMO-0000-0000-0000-0000".into(),
                 tier: "Demo".into(),
@@ -205,7 +207,7 @@ pub fn get_license_status(app_dir: String) -> Result<LicenseInfo, String> {
                 expires_at: (Utc::now() + Duration::days(7)).to_rfc3339(),
                 days_remaining: 7,
                 valid: true,
-                modules: modules_for_tier("Standard"),
+                modules: all_modules().iter().map(|m| m.id.clone()).collect(),
                 hardware_id: get_hardware_id(),
             })
         }
