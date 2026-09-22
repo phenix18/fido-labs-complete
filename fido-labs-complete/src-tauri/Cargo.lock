@@ -849,6 +849,7 @@ dependencies = [
  "log",
  "memmap2",
  "once_cell",
+ "plist",
  "printpdf",
  "regex",
  "rusb",
