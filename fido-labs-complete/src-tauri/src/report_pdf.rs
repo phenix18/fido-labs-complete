@@ -20,6 +20,7 @@ struct Report {
     page: PdfPageIndex,
     layer: PdfLayerIndex,
     y: f32,
+    sec: u32,
     reg: IndirectFontRef,
     bold: IndirectFontRef,
     mono: IndirectFontRef,
@@ -31,7 +32,7 @@ impl Report {
         let reg = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| e.to_string())?;
         let bold = doc.add_builtin_font(BuiltinFont::HelveticaBold).map_err(|e| e.to_string())?;
         let mono = doc.add_builtin_font(BuiltinFont::Courier).map_err(|e| e.to_string())?;
-        Ok(Report { doc, page, layer, y: TOP, reg, bold, mono })
+        Ok(Report { doc, page, layer, y: TOP, sec: 0, reg, bold, mono })
     }
 
     fn font(&self, f: F) -> &IndirectFontRef {
@@ -66,6 +67,13 @@ impl Report {
         self.gap(1.5);
     }
 
+    /// Titre de section auto-numéroté (1., 2., 3.… selon l'ordre d'apparition).
+    fn section(&mut self, title: &str) {
+        self.sec += 1;
+        let n = self.sec;
+        self.heading(&format!("{}. {}", n, title));
+    }
+
     fn finish(self, path: &str) -> Result<Vec<u8>, String> {
         let mut buf: Vec<u8> = Vec::new();
         {
@@ -86,6 +94,21 @@ fn s_of<'a>(v: &'a serde_json::Value, k: &str) -> &'a str {
     v.get(k).and_then(|x| x.as_str()).unwrap_or("")
 }
 
+fn fmt_size(n: u64) -> String {
+    if n < 1024 { format!("{} o", n) }
+    else if n < 1_048_576 { format!("{:.1} Ko", n as f64 / 1024.0) }
+    else if n < 1_073_741_824 { format!("{:.1} Mo", n as f64 / 1_048_576.0) }
+    else { format!("{:.2} Go", n as f64 / 1_073_741_824.0) }
+}
+
+fn base_name(path: &str) -> &str {
+    path.rsplit(|c| c == '/' || c == '\\').next().unwrap_or(path)
+}
+
+fn sha_short(sha: &str) -> String {
+    if sha.is_empty() { "—".to_string() } else { format!("{}…", &sha[..sha.len().min(24)]) }
+}
+
 /// Génère un rapport PDF forensique à partir du résultat d'extraction.
 #[tauri::command]
 pub fn generate_pdf_report(
@@ -93,8 +116,15 @@ pub fn generate_pdf_report(
     case_name: String,
     operator: String,
     extraction: serde_json::Value,
+    media: Option<serde_json::Value>,
+    physical: Option<serde_json::Value>,
     output_path: String,
 ) -> Result<serde_json::Value, String> {
+    // Normalise les sources optionnelles (null/absent → None).
+    let media = media.filter(|v| !v.is_null());
+    let physical_list: Vec<serde_json::Value> = physical
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
     let mut r = Report::new("FIDO-LABS - Rapport Forensique")?;
 
     // ── En-tête ──────────────────────────────────────────────
@@ -107,10 +137,15 @@ pub fn generate_pdf_report(
     if !s_of(&extraction, "serial").is_empty() {
         r.line(&format!("Appareil     : {}", s_of(&extraction, "serial")), 11.0, F::Reg);
     }
-    r.line(&format!("Type         : {}", if s_of(&extraction, "manifest_sha256").is_empty() { "—" } else { "Extraction logique ADB" }), 11.0, F::Reg);
+    let mut types: Vec<&str> = Vec::new();
+    if !s_of(&extraction, "manifest_sha256").is_empty() || extraction.get("artifacts").is_some() { types.push("Logique ADB"); }
+    if media.is_some() { types.push("Médias"); }
+    if !physical_list.is_empty() { types.push("Physique BROM/EDL"); }
+    let types_s = if types.is_empty() { "—".to_string() } else { types.join(" + ") };
+    r.line(&format!("Type         : {}", types_s), 11.0, F::Reg);
 
-    // ── 1. Résumé ────────────────────────────────────────────
-    r.heading("1. Résumé de l'acquisition");
+    // ── Résumé ───────────────────────────────────────────────
+    r.section("Résumé de l'acquisition");
     let summary = s_of(&extraction, "summary");
     if !summary.is_empty() { r.line(&trunc(summary, 90), 10.0, F::Reg); }
     let outdir = s_of(&extraction, "output_dir");
@@ -118,8 +153,8 @@ pub fn generate_pdf_report(
     let seal = s_of(&extraction, "manifest_sha256");
     if !seal.is_empty() { r.line(&format!("Sceau du manifeste (SHA256) : {}", seal), 9.0, F::Mono); }
 
-    // ── 2. Preuves + SHA256 ──────────────────────────────────
-    r.heading("2. Preuves collectées et empreintes SHA256");
+    // ── Preuves logiques + SHA256 ────────────────────────────
+    r.section("Preuves logiques collectées et empreintes SHA256");
     r.line(&format!("{:<32}{:>7}  {:<10} {}", "Source", "Élém.", "Statut", "SHA256"), 9.0, F::Mono);
     r.line(&"-".repeat(92), 9.0, F::Mono);
     if let Some(arts) = extraction.get("artifacts").and_then(|a| a.as_array()) {
@@ -132,11 +167,68 @@ pub fn generate_pdf_report(
             r.line(&format!("{:<32}{:>7}  {:<10} {}", name, count, status, sha_disp), 9.0, F::Mono);
         }
     } else {
-        r.line("Aucune preuve (aucune extraction fournie).", 10.0, F::Reg);
+        r.line("Aucune preuve logique (aucune extraction ADB fournie).", 10.0, F::Reg);
     }
 
-    // ── 3. Statistiques ──────────────────────────────────────
-    r.heading("3. Statistiques des données");
+    // ── Médias collectés + SHA256 ────────────────────────────
+    if let Some(m) = media.as_ref() {
+        r.section("Médias collectés et empreintes SHA256");
+        let fc = m.get("file_count").and_then(|v| v.as_i64()).unwrap_or(0);
+        let tb = m.get("total_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+        r.line(&format!("Fichiers collectés : {}     Volume total : {}", fc, fmt_size(tb)), 10.0, F::Reg);
+        if let Some(cats) = m.get("by_category").and_then(|c| c.as_object()) {
+            let cat_str = cats.iter()
+                .map(|(k, v)| format!("{}: {}", k, v.as_i64().unwrap_or(0)))
+                .collect::<Vec<_>>().join("   ");
+            if !cat_str.is_empty() { r.line(&trunc(&cat_str, 90), 9.5, F::Reg); }
+        }
+        let mdir = s_of(m, "output_dir");
+        if !mdir.is_empty() {
+            r.line(&format!("Dossier médias : {}", trunc(mdir, 80)), 9.0, F::Reg);
+            r.line(&format!("Manifeste complet (toutes empreintes) : {}", trunc(&format!("{}/media_manifest.json", mdir), 84)), 9.0, F::Reg);
+        }
+        if let Some(imgs) = m.get("images").and_then(|i| i.as_array()) {
+            if !imgs.is_empty() {
+                r.gap(1.5);
+                r.line(&format!("Échantillon d'images ({} listées, empreintes vérifiables) :", imgs.len().min(40)), 9.5, F::Bold);
+                r.line(&format!("{:<40}{:>10}  {}", "Fichier", "Taille", "SHA256"), 8.5, F::Mono);
+                r.line(&"-".repeat(92), 8.5, F::Mono);
+                for im in imgs.iter().take(40) {
+                    let name = trunc(base_name(s_of(im, "path")), 39);
+                    let size = im.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+                    r.line(&format!("{:<40}{:>10}  {}", name, fmt_size(size), sha_short(s_of(im, "sha256"))), 8.5, F::Mono);
+                }
+            }
+        }
+    }
+
+    // ── Dumps physiques (BROM/EDL) + SHA256 ──────────────────
+    if !physical_list.is_empty() {
+        r.section("Dumps physiques (BROM/EDL) et empreintes SHA256");
+        for entry in &physical_list {
+            let tool = s_of(entry, "tool");
+            let mode = s_of(entry, "mode");
+            let odir = s_of(entry, "output_dir");
+            r.gap(1.0);
+            r.line(&trunc(&format!("{} — mode {} — {}", if tool.is_empty() { "Dump physique" } else { tool }, mode, odir), 90), 9.5, F::Bold);
+            match entry.get("dumps").and_then(|d| d.as_array()) {
+                Some(dumps) if !dumps.is_empty() => {
+                    r.line(&format!("{:<40}{:>12}  {}", "Fichier", "Taille", "SHA256"), 8.5, F::Mono);
+                    r.line(&"-".repeat(92), 8.5, F::Mono);
+                    for dp in dumps {
+                        let name = trunc(base_name(s_of(dp, "file")), 39);
+                        let size = dp.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+                        r.line(&format!("{:<40}{:>12}  {}", name, fmt_size(size), sha_short(s_of(dp, "sha256"))), 8.5, F::Mono);
+                    }
+                }
+                _ => r.line("Aucun fichier de dump produit (voir le journal d'extraction).", 9.0, F::Reg),
+            }
+        }
+        r.line("Dump physique = image chiffrée de la mémoire, acquise sans contournement du verrou.", 9.0, F::Reg);
+    }
+
+    // ── Statistiques ─────────────────────────────────────────
+    r.section("Statistiques des données");
     let totals = extraction.get("totals").cloned().unwrap_or(serde_json::json!({}));
     let g = |k: &str| totals.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
     r.line(&format!("SMS      : {}", g("sms")), 10.0, F::Mono);
@@ -146,7 +238,7 @@ pub fn generate_pdf_report(
     // ── 4. Échantillon SMS ───────────────────────────────────
     if let Some(sms) = extraction.get("sms").and_then(|s| s.as_array()) {
         if !sms.is_empty() {
-            r.heading("4. Échantillon de messages (SMS)");
+            r.section("Échantillon de messages (SMS)");
             r.line(&format!("{:<20}{:<16}{:<9}{}", "Date", "Contact", "Sens", "Message"), 8.5, F::Mono);
             r.line(&"-".repeat(92), 8.5, F::Mono);
             for m in sms.iter().take(30) {
@@ -159,8 +251,8 @@ pub fn generate_pdf_report(
         }
     }
 
-    // ── 5. Intégrité / chaîne de garde ───────────────────────
-    r.heading("5. Intégrité et chaîne de garde");
+    // ── Intégrité / chaîne de garde ──────────────────────────
+    r.section("Intégrité et chaîne de garde");
     r.line("Chaque preuve est scellée par une empreinte SHA256 calculée à l'acquisition.", 9.5, F::Reg);
     r.line("Toute altération d'un fichier modifie son empreinte et invalide la preuve.", 9.5, F::Reg);
     r.line("Usage légal uniquement, avec autorisation judiciaire.", 9.5, F::Reg);
@@ -204,12 +296,47 @@ mod tests {
         let out_s = out.to_string_lossy().to_string();
         let res = generate_pdf_report(
             "REF-2024-001".into(), "Affaire Test".into(), "Investigateur".into(),
-            extraction, out_s.clone(),
+            extraction, None, None, out_s.clone(),
         ).expect("génération PDF");
         let bytes = std::fs::read(&out_s).expect("fichier PDF créé");
         assert!(bytes.starts_with(b"%PDF"), "doit être un vrai PDF (%PDF-...)");
         assert!(bytes.len() > 1000, "PDF anormalement petit");
         assert_eq!(res["sha256"].as_str().unwrap().len(), 64, "SHA256 du rapport");
+        let _ = std::fs::remove_file(&out_s);
+    }
+
+    #[test]
+    fn pdf_inclut_medias_et_dumps_physiques() {
+        // Un rapport avec médias (galerie hachée) + dumps physiques BROM/EDL.
+        let extraction = serde_json::json!({
+            "summary": "Extraction logique", "serial": "S9",
+            "artifacts": [{"name":"SMS","count":10,"status":"OK","sha256":"aa11bb22cc33"}],
+            "totals": {"sms":10,"calls":2,"contacts":5}
+        });
+        let media = serde_json::json!({
+            "file_count": 1284, "total_bytes": 778_500_000u64,
+            "output_dir": "/cases/S9/media_x",
+            "by_category": {"Images": 842, "Vidéos": 196},
+            "images": [
+                {"path":"/cases/S9/media_x/DCIM/IMG_0001.jpg","size":1_800_000u64,"sha256":"61643221d2f14be9aaaabbbbccccdddd"},
+                {"path":"/cases/S9/media_x/WhatsApp/IMG-WA0003.jpg","size":1_389_605u64,"sha256":"0e3c9c1712f8b20d1111222233334444"}
+            ]
+        });
+        let physical = serde_json::json!([
+            {"tool":"MTK (BROM)","mode":"userdata","output_dir":"/cases/S9/mtk_1",
+             "dumps":[{"file":"/cases/S9/mtk_1/userdata.bin","size":8_000_000_000u64,"sha256":"deadbeefcafe0000111122223333444455556666777788889999aaaabbbbcccc"}]}
+        ]);
+        let out = std::env::temp_dir().join("fido_test_report_full.pdf");
+        let out_s = out.to_string_lossy().to_string();
+        let res = generate_pdf_report(
+            "REF-2".into(), "Affaire 2".into(), "Op".into(),
+            extraction, Some(media), Some(physical), out_s.clone(),
+        ).expect("génération PDF complet");
+        let bytes = std::fs::read(&out_s).expect("fichier PDF créé");
+        assert!(bytes.starts_with(b"%PDF"), "vrai PDF");
+        // Le rapport complet (5+ sections) doit être plus gros qu'un rapport logique seul.
+        assert!(bytes.len() > 3000, "PDF complet trop petit ({} o)", bytes.len());
+        assert_eq!(res["sha256"].as_str().unwrap().len(), 64);
         let _ = std::fs::remove_file(&out_s);
     }
 }
