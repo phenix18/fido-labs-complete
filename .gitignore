@@ -28,6 +28,10 @@ Thumbs.db
 .vscode/
 .vs/
 
+# Outils externes embarqués (mtkclient, etc. — volumineux, récupérés séparément)
+tools/
+*.zip
+
 # Backups
 *.bak
 *.bck_before_fix

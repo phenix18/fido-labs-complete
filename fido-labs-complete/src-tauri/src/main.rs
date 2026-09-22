@@ -45,6 +45,7 @@ fn main() {
             extractors::mobile::advanced::attempt_adb_unlock_navigation,
             extractors::mobile::advanced::start_scrcpy_session,
             extractors::mobile::advanced::get_extraction_matrix,
+            extractors::mobile::advanced::extract_physical_mtk,
             // === SD CARD ===
             extractors::sdcard::image_sd,
             extractors::sdcard::carve_sd_card,

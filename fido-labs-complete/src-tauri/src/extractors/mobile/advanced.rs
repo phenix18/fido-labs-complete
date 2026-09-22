@@ -49,6 +49,25 @@ pub struct ExtractionPlan {
     pub legal_requirements: Vec<String>,
     pub estimated_success_rate: f32,
     pub risk_level: String, // LOW, MEDIUM, HIGH, CRITICAL
+    pub alternative_sources: Vec<String>, // extraction SANS contournement du verrou
+}
+
+/// Sources de données exploitables SANS déverrouiller, décoder ni contourner le verrou.
+/// Principe forensique : on ne casse pas le verrou — on récupère les données là où
+/// elles sont accessibles autrement, ou on acquiert le chiffré tel quel.
+fn legitimate_sources(state: &str) -> Vec<String> {
+    let mut v = vec![
+        "Carte SIM — contacts, SMS, ICCID/IMSI, derniers numéros : lecture directe au lecteur SIM (aucun verrou appareil impliqué).".into(),
+        "Carte SD amovible — photos, documents, médias WhatsApp : retirer et imager/carver directement (souvent non chiffrée).".into(),
+        "Sauvegarde cloud (Google / Apple iCloud / Samsung) — sur réquisition judiciaire au fournisseur : les données sont hors de l'appareil, le verrou ne s'applique pas.".into(),
+        "Ordinateurs & supports associés — sauvegardes iTunes/adb, tokens de session, fichiers synchronisés sur un PC saisi.".into(),
+        "Objets liés au compte — montre connectée, autre appareil de la personne synchronisé sur le même compte.".into(),
+    ];
+    if state.contains("LOCKED") || state.contains("OFF") || state == "ADB_UNAUTHORIZED" || state == "UNKNOWN" {
+        v.push("Dump physique CHIFFRÉ (BROM/EDL/ISP/chip-off) — on acquiert la partition telle quelle SANS la déchiffrer. Contenu lisible seulement si l'appareil était déjà déverrouillé depuis l'allumage (état AFU) ; sinon on conserve le chiffré pour analyse ultérieure légale.".into());
+        v.push("Code d'accès obtenu LÉGALEMENT — fourni par le propriétaire, ou par réquisition/mandat. Ce n'est PAS un contournement : c'est la voie légale prioritaire.".into());
+    }
+    v
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -295,6 +314,7 @@ fn build_extraction_plan(state: &str, screen_broken: bool, locked: bool) -> Extr
             "OFF_BROM_MTK" | "OFF_EDL_QUALCOMM" => "MEDIUM".into(),
             _ => "LOW".into(),
         },
+        alternative_sources: legitimate_sources(state),
     }
 }
 
@@ -381,4 +401,111 @@ pub struct ExtractionMatrixRow {
     pub data_access: String,
     pub difficulty: String,
     pub hardware_required: bool,
+}
+
+// ─── EXTRACTION PHYSIQUE MediaTek (BROM) via mtkclient ────────────────────────
+// Pilote l'outil open-source mtkclient (bkerler/mtkclient) : lit la mémoire flash
+// en mode BootROM, SANS déverrouiller ni contourner le verrou. Le dump obtenu est
+// la partition telle quelle (chiffrée si FBE — lisible seulement en état AFU).
+
+fn sanitize_id(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect()
+}
+
+/// Localise le python du venv et le script mtk.py (env override puis chemins candidats).
+fn resolve_mtk() -> Result<(String, String), String> {
+    if let Ok(script) = std::env::var("FIDO_MTK_SCRIPT") {
+        if std::path::Path::new(&script).exists() {
+            let py = std::env::var("FIDO_MTK_PYTHON").unwrap_or_else(|_| "python".into());
+            return Ok((py, script));
+        }
+    }
+    // Layout dev / installeur (venv à côté du script)
+    let candidates = [
+        ("E:/fido-labs-complete/fido-labs-complete/tools/mtk-venv/Scripts/python.exe",
+         "E:/fido-labs-complete/fido-labs-complete/tools/mtkclient-main/mtk.py"),
+        ("tools/mtk-venv/Scripts/python.exe", "tools/mtkclient-main/mtk.py"),
+        ("mtkclient/mtk-venv/Scripts/python.exe", "mtkclient/mtk.py"),
+    ];
+    for (py, script) in candidates {
+        if std::path::Path::new(script).exists() {
+            let python = if std::path::Path::new(py).exists() { py.to_string() } else { "python".into() };
+            return Ok((python, script.to_string()));
+        }
+    }
+    Err("mtkclient introuvable. Installez-le (tools/mtkclient-main) ou définissez la variable FIDO_MTK_SCRIPT.".into())
+}
+
+/// Extraction physique MediaTek via mtkclient (mode BROM).
+/// mode: "gpt" (lister partitions), "userdata" (dump userdata), "full" (toutes partitions).
+#[tauri::command]
+pub fn extract_physical_mtk(case_id: String, output_dir: String, mode: String) -> Result<serde_json::Value, String> {
+    use sha2::Digest;
+
+    let (python, script) = resolve_mtk()?;
+    let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let base = format!("{}/mtk_{}_{}", output_dir.trim_end_matches(|c| c == '/' || c == '\\'), sanitize_id(&case_id), ts);
+    std::fs::create_dir_all(&base).map_err(|e| format!("Création {}: {}", base, e))?;
+
+    let args: Vec<String> = match mode.as_str() {
+        "gpt"      => vec!["printgpt".into()],
+        "userdata" => vec!["r".into(), "userdata".into(), format!("{}/userdata.bin", base)],
+        "full"     => vec!["rl".into(), base.clone()],
+        other      => return Err(format!("Mode inconnu: {}", other)),
+    };
+
+    let script_dir = std::path::Path::new(&script).parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let out = Command::new(&python)
+        .arg(&script)
+        .args(&args)
+        .current_dir(&script_dir)
+        .output()
+        .map_err(|e| format!("Lancement mtkclient échoué ({}): {}", python, e))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    std::fs::write(
+        format!("{}/mtk_log.txt", base),
+        format!("$ {} {} {}\n\n=== STDOUT ===\n{}\n=== STDERR ===\n{}", python, script, args.join(" "), stdout, stderr),
+    ).ok();
+
+    // Hasher les dumps produits (chaîne de garde)
+    let mut dumps = Vec::new();
+    for entry in walkdir::WalkDir::new(&base).into_iter().flatten() {
+        if !entry.file_type().is_file() { continue; }
+        let p = entry.path();
+        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".bin") || name.ends_with(".img") {
+            if let Ok(data) = std::fs::read(p) {
+                let mut h = sha2::Sha256::new();
+                h.update(&data);
+                dumps.push(serde_json::json!({
+                    "file": p.to_string_lossy(),
+                    "size": data.len(),
+                    "sha256": hex::encode(h.finalize()),
+                }));
+            }
+        }
+    }
+
+    let ok = out.status.success();
+    let n = stdout.chars().count();
+    let excerpt: String = stdout.chars().skip(n.saturating_sub(1500)).collect();
+    Ok(serde_json::json!({
+        "success": ok,
+        "summary": if ok {
+            format!("Extraction physique MTK terminée — {} dump(s)", dumps.len())
+        } else {
+            "mtkclient n'a pas abouti — appareil en mode BROM ? pilote USB (UsbDk/libusb) installé ? Voir le log.".to_string()
+        },
+        "mode": mode,
+        "output_dir": base,
+        "dumps": dumps,
+        "log": excerpt,
+    }))
 }

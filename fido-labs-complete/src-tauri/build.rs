@@ -1,4 +1,4 @@
-// FIDO-LABS build script
+// FIDO-LABS build script (Tauri 2.x)
 fn main() {
     tauri_build::build();
 
