@@ -104,6 +104,214 @@ pub struct PasswordRecoveryOptions {
     pub mdm_enrolled: bool,        // inscrit dans un MDM entreprise
 }
 
+// ─── CLASSIFICATION AUTOMATIQUE : IDENTITÉ + ÉTAT DE SÉCURITÉ ─────
+// Détecte l'appareil branché (ADB + USB VID/PID) et produit une fiche
+// structurée : plateforme, identité, état (verrouillé / éteint / non autorisé),
+// débogage, autorisation, chiffrement (BFU/AFU) et méthodes d'acquisition
+// RÉELLEMENT disponibles ici et maintenant — SANS aucun contournement.
+// Correspond aux sections 2, 3, 10 et 13 du cahier des charges Mobile Forensics.
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AcquisitionOption {
+    pub method: String,
+    pub available: bool,          // réellement possible dans cet état, ici et maintenant
+    pub requires_hardware: bool,
+    pub note: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DeviceClassification {
+    pub platform: String,         // Android | iOS | Inconnu
+    pub manufacturer: String,
+    pub model: String,
+    pub os_version: String,
+    pub serial: String,
+    pub connection: String,       // USB-ADB | USB-BROM | USB-EDL | USB-Fastboot | USB | Aucune
+    pub state: String,            // code machine (ON_UNLOCKED, ADB_UNAUTHORIZED, OFF_BROM_MTK, ABSENT…)
+    pub state_label: String,      // libellé lisible (FR)
+    pub usb_debugging: bool,
+    pub authorized: bool,
+    pub encryption_state: String, // AFU | BFU | INCONNU | N/A
+    pub encryption_note: String,
+    pub acquisition_available: bool,
+    pub acquisition_methods: Vec<AcquisitionOption>,
+    pub notes: Vec<String>,       // documentation honnête de l'état
+    pub timestamp: String,        // UTC (chaîne de garde)
+}
+
+fn adb_prop(serial: &str, prop: &str) -> String {
+    Command::new("adb").args(["-s", serial, "shell", "getprop", prop]).output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Détection heuristique du verrouillage écran (nécessite ADB autorisé).
+/// Some(true)=verrouillé, Some(false)=déverrouillé, None=indéterminé.
+fn adb_screen_locked(serial: &str) -> Option<bool> {
+    let out = Command::new("adb").args(["-s", serial, "shell", "dumpsys", "window"]).output().ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    for (needle, locked) in [
+        ("mShowingLockscreen=true", true), ("mShowingLockscreen=false", false),
+        ("mDreamingLockscreen=true", true), ("mDreamingLockscreen=false", false),
+        ("mKeyguardShowing=true", true), ("mKeyguardShowing=false", false),
+        ("isStatusBarKeyguard=true", true), ("isStatusBarKeyguard=false", false),
+    ] {
+        if s.contains(needle) { return Some(locked); }
+    }
+    None
+}
+
+/// Classe l'appareil branché sans aucune saisie manuelle. Ne contourne rien :
+/// détecte, identifie, documente l'état et dit ce qui est réellement acquérable.
+#[tauri::command]
+pub fn classify_device() -> Result<DeviceClassification, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut notes: Vec<String> = Vec::new();
+
+    // 1) État ADB (première ligne d'appareil)
+    let adb_raw = Command::new("adb").args(["devices", "-l"]).output().ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let dev_line = adb_raw.lines().skip(1).find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
+    let adb_serial = dev_line.split_whitespace().next().unwrap_or("").to_string();
+    let adb_state = if dev_line.trim().is_empty() { "none" }
+        else if dev_line.contains("unauthorized") { "unauthorized" }
+        else if dev_line.contains("offline") { "offline" }
+        else if dev_line.split_whitespace().nth(1) == Some("device") { "device" }
+        else { "other" };
+
+    // 2) USB brut (modes spéciaux : BROM / EDL / Fastboot / iOS)
+    let usb = super::android::list_usb_devices().unwrap_or_default();
+    let special = usb.into_iter().find(|d| matches!(d.detected_type.as_str(),
+        "BROM_MTK" | "EDL_QUALCOMM" | "FASTBOOT_QUALCOMM" | "FASTBOOT_GOOGLE" | "iOS"));
+
+    // === Cas prioritaire : ADB autorisé (allumé, débogage accepté) ===
+    if adb_state == "device" {
+        let brand = adb_prop(&adb_serial, "ro.product.brand");
+        let model = adb_prop(&adb_serial, "ro.product.model");
+        let ver   = adb_prop(&adb_serial, "ro.build.version.release");
+        let boot  = adb_prop(&adb_serial, "sys.boot_completed"); // "1" si session démarrée
+        let locked = adb_screen_locked(&adb_serial);
+        let (state, label) = match locked {
+            Some(true)  => ("ON_LOCKED", "Allumé — écran verrouillé (débogage déjà autorisé)"),
+            Some(false) => ("ON_UNLOCKED", "Allumé — déverrouillé, débogage autorisé"),
+            None        => ("ON", "Allumé — débogage autorisé (verrouillage écran indéterminé)"),
+        };
+        let afu = boot == "1";
+        notes.push("Acquisition logique disponible : SMS, appels, contacts, comptes, médias, journaux.".into());
+        if locked == Some(true) {
+            notes.push("Écran verrouillé mais débogage USB déjà autorisé : l'acquisition logique reste possible SANS toucher au verrou.".into());
+        }
+        let methods = vec![
+            AcquisitionOption { method: "Extraction logique ADB".into(), available: true, requires_hardware: false, note: "Bouton « Extraction logique »".into() },
+            AcquisitionOption { method: "Collecte médias (galerie)".into(), available: true, requires_hardware: false, note: "Bouton « Collecter médias »".into() },
+            AcquisitionOption { method: "Dump physique (BROM/EDL)".into(), available: false, requires_hardware: true, note: "Surtout pertinent appareil éteint/verrouillé".into() },
+        ];
+        return Ok(DeviceClassification {
+            platform: "Android".into(),
+            manufacturer: if brand.is_empty() { "Android".into() } else { brand },
+            model: if model.is_empty() { "Inconnu".into() } else { model },
+            os_version: if ver.is_empty() { "Inconnu".into() } else { format!("Android {}", ver) },
+            serial: adb_serial,
+            connection: "USB-ADB".into(),
+            state: state.into(), state_label: label.into(),
+            usb_debugging: true, authorized: true,
+            encryption_state: if afu { "AFU".into() } else { "INCONNU".into() },
+            encryption_note: if afu {
+                "AFU (After First Unlock) : appareil déchiffré, session utilisateur active — données lisibles.".into()
+            } else { "État de chiffrement indéterminé.".into() },
+            acquisition_available: true,
+            acquisition_methods: methods, notes, timestamp: now,
+        });
+    }
+
+    // === ADB présent mais NON autorisé ===
+    if adb_state == "unauthorized" {
+        notes.push("Débogage USB ACTIVÉ mais pas encore autorisé pour cet ordinateur.".into());
+        notes.push("ACTION : sur l'écran de l'appareil, accepter « Autoriser le débogage USB » (cocher « Toujours autoriser »). FIDO-LABS ne contourne pas cette autorisation.".into());
+        return Ok(DeviceClassification {
+            platform: "Android".into(), manufacturer: "Android".into(), model: "Inconnu (non autorisé)".into(),
+            os_version: "Inconnu".into(), serial: adb_serial, connection: "USB-ADB".into(),
+            state: "ADB_UNAUTHORIZED".into(), state_label: "Débogage activé — autorisation requise sur l'appareil".into(),
+            usb_debugging: true, authorized: false,
+            encryption_state: "INCONNU".into(), encryption_note: "Indéterminé tant que l'appareil n'est pas autorisé.".into(),
+            acquisition_available: false,
+            acquisition_methods: vec![
+                AcquisitionOption { method: "Extraction logique ADB".into(), available: false, requires_hardware: false, note: "Disponible dès l'autorisation sur l'appareil".into() },
+            ],
+            notes, timestamp: now,
+        });
+    }
+
+    // === Modes spéciaux USB (éteint / téléchargement / bootloader / iOS) ===
+    if let Some(d) = special {
+        let (platform, conn, state, label, enc, enc_note, methods, mut extra): (&str,&str,&str,&str,&str,&str,Vec<AcquisitionOption>,Vec<String>) = match d.detected_type.as_str() {
+            "BROM_MTK" => (
+                "Android (MediaTek)", "USB-BROM", "OFF_BROM_MTK",
+                "Éteint — mode BootROM MediaTek (VID 0e8d)", "BFU?",
+                "Sur démarrage à froid l'appareil est en BFU (tout chiffré). Le dump récupère le contenu chiffré tel quel (lisible seulement si l'appareil était en AFU).",
+                vec![AcquisitionOption { method: "Extraction physique MTK (BROM)".into(), available: true, requires_hardware: true, note: "Carte « Extraction physique MediaTek »".into() }],
+                vec!["Acquisition physique possible SANS déverrouiller : lecture brute de la mémoire flash.".to_string()],
+            ),
+            "EDL_QUALCOMM" => (
+                "Android (Qualcomm)", "USB-EDL", "OFF_EDL_QUALCOMM",
+                "Éteint — mode EDL 9008 Qualcomm (VID 05c6)", "BFU?",
+                "Contenu chiffré au repos ; le dump EDL récupère le chiffré tel quel.",
+                vec![AcquisitionOption { method: "Extraction physique Qualcomm (EDL)".into(), available: true, requires_hardware: true, note: "Nécessite un loader firehose .elf du SoC".into() }],
+                vec!["Acquisition physique possible SANS déverrouiller (loader firehose requis).".to_string()],
+            ),
+            "FASTBOOT_QUALCOMM" | "FASTBOOT_GOOGLE" => (
+                "Android", "USB-Fastboot", "BOOTLOADER",
+                "Mode bootloader / fastboot", "N/A",
+                "En fastboot, seules les variables exposées sont lisibles ; pas d'accès aux données utilisateur sans déverrouiller le bootloader (non fait : destructif).",
+                vec![AcquisitionOption { method: "Lecture d'informations fastboot".into(), available: true, requires_hardware: false, note: "Variables exposées uniquement".into() }],
+                vec!["Aucune donnée utilisateur accessible en fastboot sans effacement — non réalisé.".to_string()],
+            ),
+            _ /* iOS */ => (
+                "iOS (Apple)", "USB", "IOS_CONNECTED",
+                "Appareil Apple détecté (VID 05ac)", "INCONNU",
+                "Sur iOS, l'accès dépend de l'appairage et du déverrouillage ; le Secure Enclave protège les données.",
+                vec![AcquisitionOption { method: "Sauvegarde iTunes/Finder (libimobiledevice)".into(), available: false, requires_hardware: false, note: "Backend iOS non intégré (à venir)".into() }],
+                vec!["Backend iOS non encore implémenté dans FIDO-LABS : détection uniquement.".to_string()],
+            ),
+        };
+        notes.append(&mut extra);
+        let available = methods.iter().any(|m| m.available);
+        return Ok(DeviceClassification {
+            platform: platform.into(), manufacturer: platform.into(), model: format!("Mode {}", d.detected_type),
+            os_version: "N/A".into(), serial: d.serial,
+            connection: conn.into(), state: state.into(), state_label: label.into(),
+            usb_debugging: false, authorized: false,
+            encryption_state: enc.into(), encryption_note: enc_note.into(),
+            acquisition_available: available, acquisition_methods: methods, notes, timestamp: now,
+        });
+    }
+
+    // === ADB offline ===
+    if adb_state == "offline" {
+        notes.push("Appareil vu par ADB mais hors ligne (rebrancher le câble, ou démarrage en cours).".into());
+        return Ok(DeviceClassification {
+            platform: "Android".into(), manufacturer: "Android".into(), model: "Inconnu".into(),
+            os_version: "Inconnu".into(), serial: adb_serial, connection: "USB-ADB".into(),
+            state: "OFFLINE".into(), state_label: "Appareil hors ligne".into(),
+            usb_debugging: true, authorized: false,
+            encryption_state: "INCONNU".into(), encryption_note: "Indéterminé.".into(),
+            acquisition_available: false, acquisition_methods: vec![], notes, timestamp: now,
+        });
+    }
+
+    // === Rien détecté ===
+    notes.push("Aucun appareil détecté. Vérifiez le câble (données, pas seulement charge), activez le débogage USB (Android allumé), ou mettez l'appareil en mode BROM/EDL (éteint).".into());
+    Ok(DeviceClassification {
+        platform: "Inconnu".into(), manufacturer: "—".into(), model: "—".into(),
+        os_version: "—".into(), serial: "".into(), connection: "Aucune".into(),
+        state: "ABSENT".into(), state_label: "Aucun appareil branché".into(),
+        usb_debugging: false, authorized: false,
+        encryption_state: "N/A".into(), encryption_note: "—".into(),
+        acquisition_available: false, acquisition_methods: vec![], notes, timestamp: now,
+    })
+}
+
 // ─── DIAGNOSTIC ──────────────────────────────────────────────────
 
 #[tauri::command]

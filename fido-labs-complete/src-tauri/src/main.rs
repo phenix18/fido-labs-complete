@@ -41,6 +41,7 @@ fn main() {
             extractors::mobile::list_usb_devices,
             extractors::mobile::get_device_info,
             // === MOBILE AVANCÉ ===
+            extractors::mobile::advanced::classify_device,
             extractors::mobile::advanced::diagnose_device,
             extractors::mobile::advanced::get_broken_screen_options,
             extractors::mobile::advanced::attempt_adb_unlock_navigation,
