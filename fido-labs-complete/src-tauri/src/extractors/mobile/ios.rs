@@ -58,16 +58,6 @@ fn find_file_id(manifest: &rusqlite::Connection, domain_like: &str, rel_path: &s
     ).ok()
 }
 
-/// Copie un fichier + ses annexes SQLite (-wal/-shm) dans out_dir sous un nom lisible,
-/// puis renvoie le chemin de la copie (pour que le WAL soit appliqué à l'ouverture).
-fn materialize(backup: &Path, file_id: &str, out_dir: &Path, nice_name: &str) -> Option<PathBuf> {
-    let src = backup_file_path(backup, file_id);
-    if !src.exists() { return None; }
-    let dst = out_dir.join(nice_name);
-    std::fs::copy(&src, &dst).ok()?;
-    Some(dst)
-}
-
 fn apple_ts_to_str(raw: i64) -> String {
     use chrono::TimeZone;
     // Nanosecondes (iOS 11+) ou secondes depuis 2001 selon l'ordre de grandeur.
@@ -151,6 +141,97 @@ fn parse_ios_calls(db: &Path) -> Vec<serde_json::Value> {
     match rows { Ok(it) => it.filter_map(|x| x.ok()).collect(), Err(_) => vec![] }
 }
 
+fn parse_ios_safari(db: &Path) -> Vec<serde_json::Value> {
+    let conn = match rusqlite::Connection::open(db) { Ok(c) => c, Err(_) => return vec![] };
+    let mut stmt = match conn.prepare(
+        "SELECT hv.visit_time, hi.url, hv.title \
+         FROM history_visits hv JOIN history_items hi ON hi.id = hv.history_item \
+         ORDER BY hv.visit_time DESC LIMIT 5000"
+    ) { Ok(s) => s, Err(_) => return vec![] };
+    let rows = stmt.query_map([], |r| {
+        let vt: f64 = r.get(0).unwrap_or(0.0);
+        let url: Option<String> = r.get(1).ok();
+        let title: Option<String> = r.get(2).ok();
+        Ok(serde_json::json!({
+            "date": apple_ts_to_str(vt as i64),
+            "url": url.unwrap_or_default(),
+            "title": title.unwrap_or_default(),
+        }))
+    });
+    match rows { Ok(it) => it.filter_map(|x| x.ok()).collect(), Err(_) => vec![] }
+}
+
+fn parse_ios_accounts(db: &Path) -> Vec<serde_json::Value> {
+    let conn = match rusqlite::Connection::open(db) { Ok(c) => c, Err(_) => return vec![] };
+    // Comptes e-mail / cloud / réseaux (Gmail, iCloud, Exchange, Facebook…).
+    let mut stmt = match conn.prepare(
+        "SELECT a.ZUSERNAME, a.ZACCOUNTDESCRIPTION, t.ZACCOUNTTYPEDESCRIPTION \
+         FROM ZACCOUNT a LEFT JOIN ZACCOUNTTYPE t ON a.ZACCOUNTTYPE = t.Z_PK \
+         WHERE a.ZUSERNAME IS NOT NULL AND a.ZUSERNAME <> '' ORDER BY t.ZACCOUNTTYPEDESCRIPTION"
+    ) { Ok(s) => s, Err(_) => return vec![] };
+    let rows = stmt.query_map([], |r| {
+        let user: Option<String> = r.get(0).ok();
+        let desc: Option<String> = r.get(1).ok();
+        let typ: Option<String> = r.get(2).ok();
+        Ok(serde_json::json!({
+            "username": user.unwrap_or_default(),
+            "description": desc.unwrap_or_default(),
+            "type": typ.unwrap_or_default(),
+        }))
+    });
+    match rows { Ok(it) => it.filter_map(|x| x.ok()).collect(), Err(_) => vec![] }
+}
+
+fn parse_ios_locations(db: &Path) -> Vec<serde_json::Value> {
+    let conn = match rusqlite::Connection::open(db) { Ok(c) => c, Err(_) => return vec![] };
+    // GPS des photos (ZASSET iOS 13+, sinon ZGENERICASSET).
+    for table in ["ZASSET", "ZGENERICASSET"] {
+        let sql = format!(
+            "SELECT ZDATECREATED, ZLATITUDE, ZLONGITUDE, ZFILENAME FROM {} \
+             WHERE ZLATITUDE IS NOT NULL AND ZLATITUDE <> -180.0 ORDER BY ZDATECREATED DESC LIMIT 5000",
+            table
+        );
+        let mut stmt = match conn.prepare(&sql) { Ok(s) => s, Err(_) => continue };
+        let rows = stmt.query_map([], |r| {
+            let d: f64 = r.get(0).unwrap_or(0.0);
+            let lat: f64 = r.get(1).unwrap_or(0.0);
+            let lon: f64 = r.get(2).unwrap_or(0.0);
+            let file: Option<String> = r.get(3).ok();
+            Ok(serde_json::json!({
+                "date": apple_ts_to_str(d as i64),
+                "lat": lat, "lon": lon,
+                "source": "Photo",
+                "label": file.unwrap_or_default(),
+            }))
+        });
+        if let Ok(it) = rows {
+            let v: Vec<_> = it.filter_map(|x| x.ok()).collect();
+            if !v.is_empty() { return v; }
+        }
+    }
+    vec![]
+}
+
+/// Copie une base + ses annexes -wal/-shm dans out_dir (pour que le WAL soit appliqué),
+/// et renvoie (chemin copie, sha256 de l'ORIGINAL, taille de l'original).
+fn materialize_db(
+    manifest: &rusqlite::Connection, backup: &Path, domain: &str, rel: &str,
+    out_dir: &Path, nice: &str,
+) -> Option<(PathBuf, String, u64)> {
+    let file_id = find_file_id(manifest, domain, rel)?;
+    let src = backup_file_path(backup, &file_id);
+    let (sha, size) = sha256_file(&src)?;
+    let dst = out_dir.join(nice);
+    std::fs::copy(&src, &dst).ok()?;
+    for suf in ["-wal", "-shm"] {
+        if let Some(fid) = find_file_id(manifest, domain, &format!("{}{}", rel, suf)) {
+            let s = backup_file_path(backup, &fid);
+            if s.exists() { std::fs::copy(&s, out_dir.join(format!("{}{}", nice, suf))).ok(); }
+        }
+    }
+    Some((dst, sha, size))
+}
+
 // ── Métadonnées appareil (Info.plist + Manifest.plist) ──
 
 fn read_device_info(backup: &Path) -> IosDeviceInfo {
@@ -211,34 +292,40 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
 
     // (nom lisible, domaine LIKE, relativePath, type)
     let targets = [
-        ("sms.db",                 "HomeDomain", "Library/SMS/sms.db",                         "sms"),
-        ("AddressBook.sqlitedb",   "HomeDomain", "Library/AddressBook/AddressBook.sqlitedb",   "contacts"),
-        ("CallHistory.storedata",  "%",          "Library/CallHistoryDB/CallHistory.storedata","calls"),
+        ("sms.db",                 "HomeDomain",       "Library/SMS/sms.db",                          "sms"),
+        ("AddressBook.sqlitedb",   "HomeDomain",       "Library/AddressBook/AddressBook.sqlitedb",    "contacts"),
+        ("CallHistory.storedata",  "%",                "Library/CallHistoryDB/CallHistory.storedata", "calls"),
+        ("History.db",             "HomeDomain",       "Library/Safari/History.db",                   "browser"),
+        ("Accounts3.sqlite",       "HomeDomain",       "Library/Accounts/Accounts3.sqlite",           "accounts"),
+        ("Photos.sqlite",          "CameraRollDomain", "Media/PhotoData/Photos.sqlite",               "locations"),
     ];
 
     let mut artifacts: Vec<serde_json::Value> = Vec::new();
     let mut sms = vec![];
     let mut calls = vec![];
     let mut contacts = vec![];
+    let mut browser = vec![];
+    let mut accounts = vec![];
+    let mut locations = vec![];
 
     for (nice, domain, rel, kind) in targets {
-        let Some(file_id) = find_file_id(&manifest, domain, rel) else { continue };
-        let src = backup_file_path(&backup, &file_id);
-        let Some((sha256, size)) = sha256_file(&src) else { continue };
-        let local = materialize(&backup, &file_id, &out_dir, nice);
-        let count = match (kind, local.as_ref()) {
-            ("sms", Some(p))      => { sms = parse_ios_sms(p);      sms.len() as i64 }
-            ("contacts", Some(p)) => { contacts = parse_ios_contacts(p); contacts.len() as i64 }
-            ("calls", Some(p))    => { calls = parse_ios_calls(p);  calls.len() as i64 }
+        let Some((local, sha256, size)) = materialize_db(&manifest, &backup, domain, rel, &out_dir, nice) else { continue };
+        let count = match kind {
+            "sms"       => { sms = parse_ios_sms(&local);        sms.len() as i64 }
+            "contacts"  => { contacts = parse_ios_contacts(&local); contacts.len() as i64 }
+            "calls"     => { calls = parse_ios_calls(&local);    calls.len() as i64 }
+            "browser"   => { browser = parse_ios_safari(&local); browser.len() as i64 }
+            "accounts"  => { accounts = parse_ios_accounts(&local); accounts.len() as i64 }
+            "locations" => { locations = parse_ios_locations(&local); locations.len() as i64 }
             _ => 0,
         };
         artifacts.push(serde_json::json!({
-            "name": match kind { "sms" => "Messages (SMS/iMessage)", "contacts" => "Contacts", "calls" => "Journal d'appels", _ => nice },
-            "kind": kind,
-            "count": count,
-            "size": size,
-            "sha256": sha256,
-            "status": "OK",
+            "name": match kind {
+                "sms" => "Messages (SMS/iMessage)", "contacts" => "Contacts", "calls" => "Journal d'appels",
+                "browser" => "Historique Safari", "accounts" => "Comptes (e-mail/cloud)", "locations" => "Géolocalisation (photos)",
+                _ => nice,
+            },
+            "kind": kind, "count": count, "size": size, "sha256": sha256, "status": "OK",
         }));
     }
 
@@ -257,7 +344,8 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "output_dir": base, "ios_info": info,
         "artifacts": artifacts,
-        "totals": {"sms": sms.len(), "calls": calls.len(), "contacts": contacts.len()},
+        "totals": {"sms": sms.len(), "calls": calls.len(), "contacts": contacts.len(),
+                   "browser": browser.len(), "accounts": accounts.len(), "locations": locations.len()},
     });
     let manifest_bytes = serde_json::to_vec_pretty(&result_core).unwrap_or_default();
     std::fs::write(format!("{}/manifest.json", base), &manifest_bytes).ok();
@@ -265,8 +353,8 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
 
     Ok(serde_json::json!({
         "summary": format!(
-            "Sauvegarde iOS analysée — {} SMS, {} appels, {} contacts ({} fichiers inventoriés)",
-            sms.len(), calls.len(), contacts.len(), file_total
+            "Sauvegarde iOS analysée — {} SMS, {} appels, {} contacts, {} URL, {} comptes, {} géoloc ({} fichiers inventoriés)",
+            sms.len(), calls.len(), contacts.len(), browser.len(), accounts.len(), locations.len(), file_total
         ),
         "encrypted": false,
         "case_id": case_id,
@@ -279,7 +367,11 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
         "sms": sms.iter().take(500).cloned().collect::<Vec<_>>(),
         "calls": calls.iter().take(500).cloned().collect::<Vec<_>>(),
         "contacts": contacts.iter().take(1000).cloned().collect::<Vec<_>>(),
-        "totals": {"sms": sms.len(), "calls": calls.len(), "contacts": contacts.len()},
+        "browser": browser.iter().take(1000).cloned().collect::<Vec<_>>(),
+        "accounts": accounts.iter().take(500).cloned().collect::<Vec<_>>(),
+        "locations": locations.iter().take(1000).cloned().collect::<Vec<_>>(),
+        "totals": {"sms": sms.len(), "calls": calls.len(), "contacts": contacts.len(),
+                   "browser": browser.len(), "accounts": accounts.len(), "locations": locations.len()},
     }))
 }
 
@@ -305,7 +397,19 @@ mod tests {
                  INSERT INTO message(date,text,is_from_me,handle_id) VALUES (614822400, 'Rendez-vous confirmé', 0, 1);"
             ).unwrap();
         }
-        // Manifest.db pointant sms.db
+        // Accounts3.sqlite : un compte Gmail
+        let acc_id = "cd34ee11acc";
+        std::fs::create_dir_all(root.join(&acc_id[..2])).unwrap();
+        {
+            let c = rusqlite::Connection::open(root.join(&acc_id[..2]).join(acc_id)).unwrap();
+            c.execute_batch(
+                "CREATE TABLE ZACCOUNTTYPE(Z_PK INTEGER PRIMARY KEY, ZACCOUNTTYPEDESCRIPTION TEXT);
+                 CREATE TABLE ZACCOUNT(Z_PK INTEGER PRIMARY KEY, ZUSERNAME TEXT, ZACCOUNTDESCRIPTION TEXT, ZACCOUNTTYPE INTEGER);
+                 INSERT INTO ZACCOUNTTYPE(Z_PK,ZACCOUNTTYPEDESCRIPTION) VALUES (1,'Google');
+                 INSERT INTO ZACCOUNT(ZUSERNAME,ZACCOUNTDESCRIPTION,ZACCOUNTTYPE) VALUES ('suspect@gmail.com','Gmail',1);"
+            ).unwrap();
+        }
+        // Manifest.db pointant sms.db + Accounts3.sqlite
         {
             let m = rusqlite::Connection::open(root.join("Manifest.db")).unwrap();
             m.execute_batch(
@@ -314,6 +418,10 @@ mod tests {
             m.execute(
                 "INSERT INTO Files(fileID,domain,relativePath,flags,file) VALUES (?1,'HomeDomain','Library/SMS/sms.db',1,NULL)",
                 rusqlite::params![file_id],
+            ).unwrap();
+            m.execute(
+                "INSERT INTO Files(fileID,domain,relativePath,flags,file) VALUES (?1,'HomeDomain','Library/Accounts/Accounts3.sqlite',1,NULL)",
+                rusqlite::params![acc_id],
             ).unwrap();
         }
 
@@ -324,6 +432,9 @@ mod tests {
         assert_eq!(r["totals"]["sms"], 1, "1 SMS décodé");
         let body = r["sms"][0]["body"].as_str().unwrap();
         assert!(body.contains("Rendez-vous"), "corps du SMS décodé: {}", body);
+        // Compte e-mail (Gmail) décodé
+        assert_eq!(r["totals"]["accounts"], 1, "1 compte e-mail");
+        assert!(r["accounts"][0]["username"].as_str().unwrap().contains("gmail"), "compte gmail détecté");
         // L'artefact SMS porte une empreinte SHA256 (chaîne de garde)
         let arts = r["artifacts"].as_array().unwrap();
         let sms_art = arts.iter().find(|a| a["kind"] == "sms").unwrap();

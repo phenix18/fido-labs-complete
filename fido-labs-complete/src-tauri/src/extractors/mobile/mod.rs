@@ -231,6 +231,45 @@ fn parse_contacts(text: &str) -> Vec<serde_json::Value> {
     }).collect()
 }
 
+/// Nom lisible pour un type d'authentificateur Android (com.google → Google/Gmail…).
+fn friendly_account_type(t: &str) -> String {
+    match t {
+        "com.google"                                   => "Google / Gmail",
+        "com.whatsapp"                                 => "WhatsApp",
+        "com.facebook.auth.login" | "com.facebook.messenger" => "Facebook",
+        "com.instagram.android"                        => "Instagram",
+        "org.telegram.messenger"                       => "Telegram",
+        "com.twitter.android.auth.login"               => "Twitter / X",
+        "com.microsoft.office.outlook.USER_ACCOUNT" | "com.microsoft.exchange" => "Outlook / Exchange",
+        "com.yahoo.mobile.client.share.account"        => "Yahoo Mail",
+        "com.samsung.android.mobileservice" | "com.osp.app.signin" => "Samsung",
+        _ => t,
+    }.to_string()
+}
+
+/// Parse la sortie `dumpsys account` en comptes structurés {name, type} (dédupliqués).
+/// Capture notamment les adresses e-mail (Gmail, Outlook, Yahoo…) enregistrées.
+fn parse_accounts_android(text: &str) -> Vec<serde_json::Value> {
+    use std::collections::HashSet;
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let l = line.trim();
+        let Some(i) = l.find("Account {name=") else { continue };
+        let rest = &l[i + "Account {name=".len()..];
+        let Some(tpos) = rest.find(", type=") else { continue };
+        let name = rest[..tpos].trim().to_string();
+        let raw = rest[tpos + ", type=".len()..].trim_end_matches('}').trim().to_string();
+        if name.is_empty() { continue; }
+        let key = format!("{}|{}", name, raw);
+        if !seen.insert(key) { continue; }
+        out.push(serde_json::json!({
+            "name": name, "type": friendly_account_type(&raw), "raw_type": raw,
+        }));
+    }
+    out
+}
+
 /// Extraction LOGIQUE réelle via ADB (sans root) : SMS, appels, contacts,
 /// comptes, Wi-Fi, applications, fichiers /sdcard + propriétés appareil.
 /// Chaque artefact est écrit sur disque et scellé par un SHA256 ; un manifeste
@@ -276,6 +315,7 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
     let mut sms: Vec<serde_json::Value> = Vec::new();
     let mut calls: Vec<serde_json::Value> = Vec::new();
     let mut contacts: Vec<serde_json::Value> = Vec::new();
+    let mut accounts: Vec<serde_json::Value> = Vec::new();
     for (name, kind, fname, args) in &sources {
         let fpath = format!("{}/{}", base, fname);
         match adb_dump(&serial, args) {
@@ -291,6 +331,7 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
                     "sms"      => sms = parse_sms(&text),
                     "calls"    => calls = parse_calls(&text),
                     "contacts" => contacts = parse_contacts(&text),
+                    "accounts" => accounts = parse_accounts_android(&text),
                     _ => {}
                 }
                 artifacts.push(Artifact {
@@ -309,6 +350,7 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
     std::fs::write(format!("{}/sms.json", base), serde_json::to_string_pretty(&sms).unwrap_or_default()).ok();
     std::fs::write(format!("{}/calls.json", base), serde_json::to_string_pretty(&calls).unwrap_or_default()).ok();
     std::fs::write(format!("{}/contacts.json", base), serde_json::to_string_pretty(&contacts).unwrap_or_default()).ok();
+    std::fs::write(format!("{}/accounts.json", base), serde_json::to_string_pretty(&accounts).unwrap_or_default()).ok();
 
     // 4. Manifeste chaîne de garde (JSON)
     let manifest = serde_json::json!({
@@ -341,7 +383,8 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
         "sms": sms.iter().take(1000).collect::<Vec<_>>(),
         "calls": calls.iter().take(1000).collect::<Vec<_>>(),
         "contacts": contacts.iter().take(2000).collect::<Vec<_>>(),
-        "totals": { "sms": sms.len(), "calls": calls.len(), "contacts": contacts.len() },
+        "accounts": accounts.iter().take(500).collect::<Vec<_>>(),
+        "totals": { "sms": sms.len(), "calls": calls.len(), "contacts": contacts.len(), "accounts": accounts.len() },
     }))
 }
 
