@@ -509,3 +509,103 @@ pub fn extract_physical_mtk(case_id: String, output_dir: String, mode: String) -
         "log": excerpt,
     }))
 }
+
+// ─── EXTRACTION PHYSIQUE Qualcomm (EDL 9008) via edl (bkerler/edl) ─────────────
+// Mode Emergency Download (Sahara/Firehose). Nécessite un loader firehose
+// (prog_firehose_*.elf) spécifique au SoC pour la plupart des appareils.
+
+fn resolve_edl() -> Result<(String, String), String> {
+    if let Ok(script) = std::env::var("FIDO_EDL_SCRIPT") {
+        if std::path::Path::new(&script).exists() {
+            let py = std::env::var("FIDO_EDL_PYTHON").unwrap_or_else(|_| "python".into());
+            return Ok((py, script));
+        }
+    }
+    let candidates = [
+        ("E:/fido-labs-complete/fido-labs-complete/tools/edl-venv/Scripts/python.exe",
+         "E:/fido-labs-complete/fido-labs-complete/tools/edl-master/edl.py"),
+        ("tools/edl-venv/Scripts/python.exe", "tools/edl-master/edl.py"),
+    ];
+    for (py, script) in candidates {
+        if std::path::Path::new(script).exists() {
+            let python = if std::path::Path::new(py).exists() { py.to_string() } else { "python".into() };
+            return Ok((python, script.to_string()));
+        }
+    }
+    Err("edl introuvable (tools/edl-master) — définissez FIDO_EDL_SCRIPT.".into())
+}
+
+/// Extraction physique Qualcomm via edl (mode EDL 9008).
+/// mode: "gpt" | "userdata" | "full". loader: chemin optionnel vers un firehose .elf.
+#[tauri::command]
+pub fn extract_physical_edl(case_id: String, output_dir: String, mode: String, loader: String) -> Result<serde_json::Value, String> {
+    use sha2::Digest;
+
+    let (python, script) = resolve_edl()?;
+    let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let base = format!("{}/edl_{}_{}", output_dir.trim_end_matches(|c| c == '/' || c == '\\'), sanitize_id(&case_id), ts);
+    std::fs::create_dir_all(&base).map_err(|e| format!("Création {}: {}", base, e))?;
+
+    let mut args: Vec<String> = match mode.as_str() {
+        "gpt"      => vec!["printgpt".into()],
+        "userdata" => vec!["r".into(), "userdata".into(), format!("{}/userdata.bin", base)],
+        "full"     => vec!["rl".into(), base.clone()],
+        other      => return Err(format!("Mode inconnu: {}", other)),
+    };
+    if !loader.trim().is_empty() {
+        args.push("--loader".into());
+        args.push(loader.trim().to_string());
+    }
+
+    let script_dir = std::path::Path::new(&script).parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let out = Command::new(&python)
+        .arg(&script)
+        .args(&args)
+        .current_dir(&script_dir)
+        .output()
+        .map_err(|e| format!("Lancement edl échoué ({}): {}", python, e))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    std::fs::write(
+        format!("{}/edl_log.txt", base),
+        format!("$ {} {} {}\n\n=== STDOUT ===\n{}\n=== STDERR ===\n{}", python, script, args.join(" "), stdout, stderr),
+    ).ok();
+
+    let mut dumps = Vec::new();
+    for entry in walkdir::WalkDir::new(&base).into_iter().flatten() {
+        if !entry.file_type().is_file() { continue; }
+        let p = entry.path();
+        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".bin") || name.ends_with(".img") {
+            if let Ok(data) = std::fs::read(p) {
+                let mut h = sha2::Sha256::new();
+                h.update(&data);
+                dumps.push(serde_json::json!({
+                    "file": p.to_string_lossy(),
+                    "size": data.len(),
+                    "sha256": hex::encode(h.finalize()),
+                }));
+            }
+        }
+    }
+
+    let ok = out.status.success();
+    let n = stdout.chars().count();
+    let excerpt: String = stdout.chars().skip(n.saturating_sub(1500)).collect();
+    Ok(serde_json::json!({
+        "success": ok,
+        "summary": if ok {
+            format!("Extraction EDL terminée — {} dump(s)", dumps.len())
+        } else {
+            "edl n'a pas abouti — appareil en mode EDL 9008 ? Loader firehose (.elf) fourni ? Voir le log.".to_string()
+        },
+        "mode": mode,
+        "output_dir": base,
+        "dumps": dumps,
+        "log": excerpt,
+    }))
+}
