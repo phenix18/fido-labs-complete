@@ -49,6 +49,7 @@ fn main() {
             extractors::mobile::advanced::get_extraction_matrix,
             extractors::mobile::advanced::extract_physical_mtk,
             extractors::mobile::advanced::extract_physical_edl,
+            extractors::mobile::ios::analyze_ios_backup,
             // === SD CARD ===
             extractors::sdcard::image_sd,
             extractors::sdcard::carve_sd_card,
@@ -68,6 +69,7 @@ fn main() {
             analyzer::timeline::get_timeline_events,
             analyzer::money_flow::analyze_money_flow,
             analyzer::link_graph::build_link_graph,
+            analyzer::data_analysis::get_data_analysis,
             // === CSM ===
             csm::create_custody,
             csm::add_custody_step,
