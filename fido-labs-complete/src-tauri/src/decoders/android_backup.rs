@@ -19,15 +19,68 @@ fn sanitize_rel(p: &str) -> String {
         .join("/")
 }
 
-/// Déballe et inventorie une sauvegarde `adb backup` (.ab).
+// ─── Déchiffrement AES-256 d'un `adb backup` protégé par mot de passe ─────────
+// Schéma documenté (AOSP) : PBKDF2-HMAC-SHA1(mot de passe) → clé utilisateur → déchiffre
+// le blob de clé maître (AES-CBC) → clé maître + IV → déchiffre la charge (AES-CBC) →
+// zlib → tar. Le mot de passe est fourni par l'enquêteur (voie légale) : ce n'est pas un
+// contournement, c'est la lecture autorisée d'une sauvegarde protégée.
+use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+
+fn pbkdf2_sha1(pw: &[u8], salt: &[u8], rounds: u32, len: usize) -> Vec<u8> {
+    let mut out = vec![0u8; len];
+    pbkdf2::pbkdf2_hmac::<sha1::Sha1>(pw, salt, rounds, &mut out);
+    out
+}
+
+fn aes256_cbc_decrypt(key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, String> {
+    if key.len() != 32 || iv.len() != 16 { return Err("clé/IV de taille invalide".into()); }
+    if data.is_empty() || data.len() % 16 != 0 { return Err("données AES non alignées".into()); }
+    let mut buf = data.to_vec();
+    let pt = Aes256CbcDec::new(key.into(), iv.into())
+        .decrypt_padded_mut::<Pkcs7>(&mut buf)
+        .map_err(|_| "déchiffrement AES échoué (mot de passe incorrect ?)".to_string())?;
+    Ok(pt.to_vec())
+}
+
+/// Déchiffre la charge utile d'un .ab AES-256 avec le mot de passe fourni.
+/// Renvoie les octets en clair (= zlib(tar) si compressé, sinon tar).
+fn decrypt_adb_backup(password: &str, user_salt: &str, _ck_salt: &str, rounds: u32,
+                      user_iv: &str, mk_blob: &str, payload: &[u8]) -> Result<Vec<u8>, String> {
+    let usalt = hex::decode(user_salt.trim()).map_err(|_| "sel utilisateur (hex) invalide".to_string())?;
+    let uiv = hex::decode(user_iv.trim()).map_err(|_| "IV utilisateur (hex) invalide".to_string())?;
+    let blob_enc = hex::decode(mk_blob.trim()).map_err(|_| "blob de clé maître (hex) invalide".to_string())?;
+
+    let user_key = pbkdf2_sha1(password.as_bytes(), &usalt, rounds, 32);
+    let blob = aes256_cbc_decrypt(&user_key, &uiv, &blob_enc)
+        .map_err(|_| "Mot de passe incorrect (déchiffrement du blob de clé échoué).".to_string())?;
+
+    // blob = [n]<masterIV>[n]<masterKey>[n]<checksum>
+    let mut i = 0usize;
+    let mut take = || -> Result<Vec<u8>, String> {
+        if i >= blob.len() { return Err("blob de clé tronqué".into()); }
+        let n = blob[i] as usize; i += 1;
+        if i + n > blob.len() { return Err("blob de clé tronqué".into()); }
+        let v = blob[i..i + n].to_vec(); i += n; Ok(v)
+    };
+    let master_iv = take()?;
+    let master_key = take()?;
+    let _checksum = take().unwrap_or_default(); // vérif. de somme best-effort (bug de signe Android connu)
+
+    aes256_cbc_decrypt(&master_key, &master_iv, payload)
+        .map_err(|_| "Charge utile indéchiffrable (mot de passe ou format).".to_string())
+}
+
+/// Déballe et inventorie une sauvegarde `adb backup` (.ab). `password` déchiffre les
+/// sauvegardes AES-256 (mot de passe fourni légalement — pas un contournement).
 #[tauri::command]
-pub fn parse_android_backup(case_id: String, ab_path: String, output_dir: String) -> Result<serde_json::Value, String> {
+pub fn parse_android_backup(case_id: String, ab_path: String, output_dir: String, password: Option<String>) -> Result<serde_json::Value, String> {
     let data = std::fs::read(&ab_path).map_err(|e| format!("Lecture {}: {}", ab_path, e))?;
 
-    // ── En-tête : 4 lignes ASCII terminées par \n ──
+    // ── En-tête ASCII (4 lignes en clair ; 9 lignes si chiffré AES-256) ──
     let mut nl = Vec::new();
     for (i, &b) in data.iter().enumerate() {
-        if b == b'\n' { nl.push(i); if nl.len() == 4 { break; } }
+        if b == b'\n' { nl.push(i); if nl.len() >= 9 { break; } }
     }
     if nl.len() < 4 { return Err("Fichier .ab invalide (en-tête incomplet).".into()); }
     let line = |a: usize, b: usize| String::from_utf8_lossy(&data[a..b]).trim().to_string();
@@ -38,23 +91,38 @@ pub fn parse_android_backup(case_id: String, ab_path: String, output_dir: String
     let version = line(nl[0] + 1, nl[1]);
     let compressed = line(nl[1] + 1, nl[2]) == "1";
     let encryption = line(nl[2] + 1, nl[3]);
-    let payload = &data[nl[3] + 1..];
+    let is_encrypted = !encryption.is_empty() && encryption.to_lowercase() != "none";
+    let pw = password.unwrap_or_default();
 
-    if !encryption.is_empty() && encryption.to_lowercase() != "none" {
-        return Ok(serde_json::json!({
-            "success": false, "encrypted": true, "version": version, "encryption": encryption,
-            "summary": format!("Sauvegarde Android CHIFFRÉE ({}) — mot de passe requis. Aucun contournement effectué.", encryption),
-        }));
-    }
+    // Charge utile EN CLAIR (déchiffrée si besoin) = zlib(tar) ou tar.
+    let plain_payload: Vec<u8> = if is_encrypted {
+        if pw.trim().is_empty() {
+            return Ok(serde_json::json!({
+                "success": false, "encrypted": true, "needs_password": true,
+                "version": version, "encryption": encryption,
+                "summary": format!("Sauvegarde Android CHIFFRÉE ({}) — saisissez le mot de passe (légal) pour déchiffrer.", encryption),
+            }));
+        }
+        if nl.len() < 9 { return Err("En-tête chiffré incomplet (9 lignes attendues).".into()); }
+        let user_salt = line(nl[3] + 1, nl[4]);
+        let ck_salt   = line(nl[4] + 1, nl[5]);
+        let rounds: u32 = line(nl[5] + 1, nl[6]).parse().map_err(|_| "Nombre de tours PBKDF2 invalide.".to_string())?;
+        let user_iv   = line(nl[6] + 1, nl[7]);
+        let mk_blob   = line(nl[7] + 1, nl[8]);
+        let payload = &data[nl[8] + 1..];
+        decrypt_adb_backup(&pw, &user_salt, &ck_salt, rounds, &user_iv, &mk_blob, payload)?
+    } else {
+        data[nl[3] + 1..].to_vec()
+    };
 
     // ── Décompression zlib → TAR ──
     let tar_bytes: Vec<u8> = if compressed {
-        let mut z = flate2::read::ZlibDecoder::new(payload);
+        let mut z = flate2::read::ZlibDecoder::new(&plain_payload[..]);
         let mut out = Vec::new();
         z.read_to_end(&mut out).map_err(|e| format!("Décompression zlib échouée : {}", e))?;
         out
     } else {
-        payload.to_vec()
+        plain_payload
     };
 
     // ── Dossier de sortie ──
@@ -130,9 +198,10 @@ pub fn parse_android_backup(case_id: String, ab_path: String, output_dir: String
     let manifest_sha256 = sha256_bytes(&mbytes);
 
     Ok(serde_json::json!({
-        "success": true, "encrypted": false,
+        "success": true, "encrypted": is_encrypted, "decrypted": is_encrypted,
         "summary": format!(
-            "Sauvegarde Android déballée — {} fichiers, {} app(s), {} base(s) SQLite ({:.1} Mo)",
+            "{}{} fichiers, {} app(s), {} base(s) SQLite ({:.1} Mo)",
+            if is_encrypted { "Sauvegarde Android déchiffrée & déballée — " } else { "Sauvegarde Android déballée — " },
             file_count, apps.len(), databases.len(), total_bytes as f64 / 1e6
         ),
         "version": version, "compressed": compressed,
@@ -318,7 +387,7 @@ mod tests {
         std::fs::write(&abp, &ab).unwrap();
 
         let r = parse_android_backup(
-            "CASE-AB".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(),
+            "CASE-AB".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(), None,
         ).expect("parse .ab");
         assert_eq!(r["success"], true);
         assert_eq!(r["encrypted"], false);
@@ -378,10 +447,75 @@ mod tests {
         let abp = dir.join("enc.ab");
         // En-tête chiffré AES-256 (payload factice) : doit être signalé, pas déchiffré.
         std::fs::write(&abp, b"ANDROID BACKUP\n5\n1\nAES-256\nXXXX").unwrap();
-        let r = parse_android_backup("C".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string())
+        let r = parse_android_backup("C".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(), None)
             .expect("header parse");
         assert_eq!(r["encrypted"], true);
         assert_eq!(r["success"], false);
+        assert_eq!(r["needs_password"], true);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dechiffre_un_ab_protege_par_mot_de_passe() {
+        use cbc::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+        type Enc = cbc::Encryptor<aes::Aes256>;
+        fn aes_enc(key: &[u8], iv: &[u8], data: &[u8]) -> Vec<u8> {
+            let mut buf = vec![0u8; data.len() + 16];
+            buf[..data.len()].copy_from_slice(data);
+            Enc::new(key.into(), iv.into()).encrypt_padded_mut::<Pkcs7>(&mut buf, data.len()).unwrap().to_vec()
+        }
+
+        // 1) TAR (avec une base SQLite) → zlib
+        let mut content = b"SQLite format 3\0".to_vec(); content.extend_from_slice(&[7u8; 64]);
+        let mut tarbuf = Vec::new();
+        { let mut b = tar::Builder::new(&mut tarbuf); let mut h = tar::Header::new_gnu();
+          h.set_size(content.len() as u64); h.set_mode(0o644); h.set_cksum();
+          b.append_data(&mut h, "apps/com.secret.app/db/secret.db", &content[..]).unwrap(); b.finish().unwrap(); }
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        z.write_all(&tarbuf).unwrap(); let payload_plain = z.finish().unwrap();
+
+        // 2) Paramètres crypto
+        let pw = "MotDePasse#2026";
+        let user_salt = [0x11u8; 64]; let ck_salt = [0x22u8; 64]; let rounds = 10_000u32;
+        let user_iv = [0x33u8; 16]; let master_key = [0x44u8; 32]; let master_iv = [0x55u8; 16];
+        let user_key = pbkdf2_sha1(pw.as_bytes(), &user_salt, rounds, 32);
+
+        // 3) blob = [16]IV [32]MK [4]checksum(factice) puis chiffré avec la clé utilisateur
+        let mut blob = Vec::new();
+        blob.push(16); blob.extend_from_slice(&master_iv);
+        blob.push(32); blob.extend_from_slice(&master_key);
+        blob.push(4);  blob.extend_from_slice(&[0u8; 4]);
+        let mk_blob_enc = aes_enc(&user_key, &user_iv, &blob);
+        let payload_enc = aes_enc(&master_key, &master_iv, &payload_plain);
+
+        // 4) Fichier .ab chiffré (en-tête 9 lignes)
+        let mut ab = Vec::new();
+        ab.extend_from_slice(format!(
+            "ANDROID BACKUP\n5\n1\nAES-256\n{}\n{}\n{}\n{}\n{}\n",
+            hex::encode_upper(user_salt), hex::encode_upper(ck_salt), rounds,
+            hex::encode_upper(user_iv), hex::encode_upper(&mk_blob_enc)
+        ).as_bytes());
+        ab.extend_from_slice(&payload_enc);
+
+        let dir = std::env::temp_dir().join(format!("fido_abenc2_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir); std::fs::create_dir_all(&dir).unwrap();
+        let abp = dir.join("enc.ab"); std::fs::write(&abp, &ab).unwrap();
+
+        // Sans mot de passe → demande le mot de passe
+        let r0 = parse_android_backup("C".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(), None).unwrap();
+        assert_eq!(r0["needs_password"], true);
+
+        // Avec le bon mot de passe → déchiffré + déballé
+        let r = parse_android_backup("C".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(), Some(pw.into())).unwrap();
+        assert_eq!(r["success"], true, "déchiffrement OK");
+        assert_eq!(r["decrypted"], true);
+        assert_eq!(r["file_count"], 1);
+        assert_eq!(r["databases"].as_array().unwrap().len(), 1);
+
+        // Mauvais mot de passe → erreur (pas de contournement)
+        let bad = parse_android_backup("C".into(), abp.to_string_lossy().to_string(), dir.to_string_lossy().to_string(), Some("faux".into()));
+        assert!(bad.is_err(), "mauvais mot de passe doit échouer");
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
