@@ -130,5 +130,104 @@ fn parse_sms_body(body: &str, provider: &str, date: &str) -> Option<MoneyTx> {
             }
         }
     }
+
+    // ── Repli générique par mots-clés (XOF/FCFA + type déduit du texte) ──
+    // Capte les formulations non couvertes par les patterns ci-dessus.
+    let bl = body.to_lowercase();
+    let amount_re = Regex::new(r"(?i)([0-9][0-9\s.]{1,})\s*(?:f\b|fcfa|xof|xaf|francs?)").ok();
+    if let Some(m) = amount_re.as_ref().and_then(|r| r.captures(body)).and_then(|c| c.get(1)) {
+        let montant = m.as_str().replace(' ', "").replace('.', "").parse::<i64>().unwrap_or(0);
+        if montant > 0 {
+            let type_tx = if bl.contains("retrait") { "RETRAIT" }
+                else if bl.contains("depot") || bl.contains("dépôt") { "DEPOT" }
+                else if bl.contains("paiement") || bl.contains("achat") { "PAIEMENT" }
+                else if bl.contains("envoy") || bl.contains("transf") { "ENVOYE" }
+                else if bl.contains("recu") || bl.contains("reçu") || bl.contains("credit") || bl.contains("received") { "RECU" }
+                else { "AUTRE" };
+            let num = Regex::new(r"\+?\d[\d\s]{6,}\d").ok()
+                .and_then(|r| r.find(body))
+                .map(|mm| mm.as_str().replace(' ', ""))
+                .unwrap_or_default();
+            let (from_num, to_num) = match type_tx {
+                "RECU" | "DEPOT" => (if num.is_empty() { "?".into() } else { num }, "moi".to_string()),
+                _ => ("moi".to_string(), if num.is_empty() { "commerçant".into() } else { num }),
+            };
+            let currency = if bl.contains("xaf") { "XAF" } else { "XOF" };
+            return Some(MoneyTx {
+                id: Uuid::new_v4().to_string(), date: date.to_string(),
+                provider: provider.to_string(), type_tx: type_tx.to_string(),
+                montant, currency: currency.into(), from_num, to_num,
+                balance_after, reference, raw_sms: body.chars().take(200).collect(),
+            });
+        }
+    }
     None
+}
+
+/// Mots-clés de pré-filtrage mobile money (déclenchent l'analyse d'un message).
+const MONEY_KEYWORDS: &[&str] = &[
+    "xof", "fcfa", "xaf", "orange money", "wave", "moov", "mtn", "flooz",
+    "argent", "depot", "dépôt", "recu", "reçu", "paiement", "retrait",
+    "envoy", "transf", "solde", "franc", "received", "sent",
+];
+
+/// Analyse les SMS/messages DÉJÀ EXTRAITS (en mémoire) par mots-clés et construit
+/// le graphe de flux financiers — sans base SQLite séparée. Chaque message porte
+/// `body`/`text`, `contact`/`address`/`from_jid` et `date`/`timestamp`.
+#[tauri::command]
+pub fn scan_money_from_messages(messages: Vec<serde_json::Value>) -> Result<serde_json::Value, String> {
+    let s = |m: &serde_json::Value, keys: &[&str]| -> String {
+        for k in keys { if let Some(v) = m.get(*k).and_then(|v| v.as_str()) { if !v.is_empty() { return v.to_string(); } } }
+        String::new()
+    };
+    let mut txs: Vec<MoneyTx> = Vec::new();
+    for m in &messages {
+        let body = s(m, &["body", "text"]);
+        if body.is_empty() { continue; }
+        let address = s(m, &["contact", "address", "from_jid", "from"]);
+        let date = s(m, &["date", "timestamp"]);
+        let bl = body.to_lowercase();
+        if !MONEY_KEYWORDS.iter().any(|k| bl.contains(k)) { continue; }
+        let provider = detect_provider(&address, &bl);
+        if let Some(mut tx) = parse_sms_body(&body, &provider, &date) {
+            // Contrepartie : compléter avec l'expéditeur du SMS si numéro et placeholder.
+            let addr_is_num = address.chars().filter(|c| c.is_ascii_digit()).count() >= 6;
+            if addr_is_num && (tx.from_num == "?" || (tx.type_tx == "RECU" && tx.from_num == "moi")) {
+                tx.from_num = address.clone();
+            }
+            txs.push(tx);
+        }
+    }
+    let tx_values: Vec<serde_json::Value> = txs.iter().filter_map(|t| serde_json::to_value(t).ok()).collect();
+    let graph = crate::analyzer::money_flow::analyze_money_flow(tx_values)?;
+    Ok(serde_json::json!({ "transactions": txs, "graph": graph, "count": txs.len() }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detecte_les_transactions_par_mots_cles() {
+        let messages = vec![
+            serde_json::json!({"date":"2024-03-15 09:10:44","contact":"ORANGEMONEY",
+                "body":"Vous avez recu 150000 FCFA de +22607654321. Solde: 182500 FCFA. Ref: OM240315"}),
+            serde_json::json!({"date":"2024-03-15 11:20:00","contact":"WAVE",
+                "body":"Paiement de 25 000 FCFA effectue chez BOUTIQUE. Solde: 157500 F"}),
+            serde_json::json!({"date":"2024-03-16 08:00:00","contact":"+22670000000",
+                "body":"Retrait de 50000 F au point cash. Solde 107500 FCFA"}),
+            serde_json::json!({"date":"2024-03-16 09:00:00","contact":"Maman",
+                "body":"Bonjour, tu passes ce soir ?"}), // non financier -> ignoré
+        ];
+        let r = scan_money_from_messages(messages).expect("scan");
+        assert_eq!(r["count"], 3, "3 transactions détectées");
+        let txs = r["transactions"].as_array().unwrap();
+        let recu = txs.iter().find(|t| t["type_tx"] == "RECU").unwrap();
+        assert_eq!(recu["montant"], 150000);
+        assert_eq!(recu["from_num"], "+22607654321");
+        assert!(txs.iter().any(|t| t["type_tx"] == "RETRAIT" && t["montant"] == 50000));
+        assert!(txs.iter().any(|t| t["type_tx"] == "PAIEMENT" && t["montant"] == 25000));
+        // Le graphe est construit
+        assert!(r["graph"]["total_amount"].as_i64().unwrap() >= 225000);
+    }
 }

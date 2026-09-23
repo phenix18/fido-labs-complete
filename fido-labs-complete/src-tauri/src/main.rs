@@ -63,6 +63,7 @@ fn main() {
             // === DÉCODEURS ===
             decoders::whatsapp::parse_whatsapp_db,
             decoders::orange_money::parse_mobile_money,
+            decoders::orange_money::scan_money_from_messages,
             decoders::file_carver::carve_files,
             decoders::sqlite_recover::recover_deleted_records,
             decoders::android_backup::parse_android_backup,
