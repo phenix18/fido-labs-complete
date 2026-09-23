@@ -233,6 +233,36 @@ fn materialize_db(
     Some((dst, sha, size))
 }
 
+/// Lit le keybag et la clé du Manifest depuis Manifest.plist (sauvegarde chiffrée).
+fn read_encryption_params(backup: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let v = plist::Value::from_file(backup.join("Manifest.plist"))
+        .map_err(|e| format!("Manifest.plist illisible : {}", e))?;
+    let d = v.as_dictionary().ok_or("Manifest.plist non-dictionnaire")?;
+    let kb = d.get("BackupKeyBag").and_then(|x| x.as_data()).ok_or("BackupKeyBag absent")?.to_vec();
+    let mk = d.get("ManifestKey").and_then(|x| x.as_data()).ok_or("ManifestKey absente")?.to_vec();
+    Ok((kb, mk))
+}
+
+/// Matérialise un fichier CHIFFRÉ : lit le blob de clé dans Manifest.db, déchiffre le
+/// fichier, l'écrit dans out_dir. SHA256 renvoyé = celui du fichier chiffré ACQUIS.
+fn materialize_encrypted(
+    manifest: &rusqlite::Connection, backup: &Path, crypto: &super::ios_crypto::BackupCrypto,
+    domain: &str, rel: &str, out_dir: &Path, nice: &str,
+) -> Option<(PathBuf, String, u64)> {
+    let (file_id, blob): (String, Vec<u8>) = manifest.query_row(
+        "SELECT fileID, file FROM Files WHERE relativePath = ?1 AND domain LIKE ?2 LIMIT 1",
+        rusqlite::params![rel, domain],
+        |r| Ok((r.get(0)?, r.get::<_, Vec<u8>>(1)?)),
+    ).ok()?;
+    let src = backup_file_path(backup, &file_id);
+    let enc = std::fs::read(&src).ok()?;
+    let (sha, size) = (hex::encode(Sha256::digest(&enc)), enc.len() as u64);
+    let dec = crypto.decrypt_file(&blob, &enc).ok()?;
+    let dst = out_dir.join(nice);
+    std::fs::write(&dst, &dec).ok()?;
+    Some((dst, sha, size))
+}
+
 // ── Métadonnées appareil (Info.plist + Manifest.plist) ──
 
 fn read_device_info(backup: &Path) -> IosDeviceInfo {
@@ -256,8 +286,9 @@ fn read_device_info(backup: &Path) -> IosDeviceInfo {
 }
 
 /// Analyse une sauvegarde iOS et produit le même format que l'extraction logique Android.
+/// `password` déchiffre les sauvegardes chiffrées (mot de passe fourni légalement).
 #[tauri::command]
-pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: String) -> Result<serde_json::Value, String> {
+pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: String, password: Option<String>) -> Result<serde_json::Value, String> {
     let backup = PathBuf::from(&backup_path);
     let manifest_db = backup.join("Manifest.db");
     if !manifest_db.exists() {
@@ -269,14 +300,13 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
     }
 
     let info = read_device_info(&backup);
-    if info.encrypted {
+    let pw = password.unwrap_or_default();
+    if info.encrypted && pw.trim().is_empty() {
         return Ok(serde_json::json!({
-            "summary": "Sauvegarde iOS CHIFFRÉE — déchiffrement requis (mot de passe légal). Aucun contournement effectué.",
-            "encrypted": true,
-            "ios_info": info,
-            "serial": info.serial,
-            "artifacts": [],
-            "totals": {"sms": 0, "calls": 0, "contacts": 0},
+            "summary": "Sauvegarde iOS CHIFFRÉE — saisissez le mot de passe (légal) pour déchiffrer. Aucun contournement.",
+            "encrypted": true, "needs_password": true, "success": false,
+            "ios_info": info, "serial": info.serial,
+            "artifacts": [], "totals": {"sms": 0, "calls": 0, "contacts": 0},
         }));
     }
 
@@ -288,8 +318,22 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
     std::fs::create_dir_all(&base).map_err(|e| format!("Création {}: {}", base, e))?;
     let out_dir = PathBuf::from(&base);
 
-    let manifest = rusqlite::Connection::open(&manifest_db)
-        .map_err(|e| format!("Ouverture Manifest.db: {}", e))?;
+    // Manifest.db : déchiffré à la volée si la sauvegarde est protégée par mot de passe.
+    let crypto: Option<super::ios_crypto::BackupCrypto>;
+    let manifest = if info.encrypted {
+        let (keybag, manifest_key) = read_encryption_params(&backup)?;
+        let c = super::ios_crypto::build_crypto(&keybag, &pw)?; // erreur si mauvais mot de passe
+        let enc = std::fs::read(&manifest_db).map_err(|e| format!("Lecture Manifest.db : {}", e))?;
+        let dec = c.decrypt_manifest_db(&manifest_key, &enc)?;
+        let dec_path = format!("{}/Manifest.db", base);
+        std::fs::write(&dec_path, &dec).map_err(|e| format!("Écriture Manifest déchiffré : {}", e))?;
+        let conn = rusqlite::Connection::open(&dec_path).map_err(|e| format!("Ouverture Manifest déchiffré : {}", e))?;
+        crypto = Some(c);
+        conn
+    } else {
+        crypto = None;
+        rusqlite::Connection::open(&manifest_db).map_err(|e| format!("Ouverture Manifest.db : {}", e))?
+    };
 
     // (nom lisible, domaine LIKE, relativePath, type)
     let targets = [
@@ -310,7 +354,11 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
     let mut locations = vec![];
 
     for (nice, domain, rel, kind) in targets {
-        let Some((local, sha256, size)) = materialize_db(&manifest, &backup, domain, rel, &out_dir, nice) else { continue };
+        let mat = match crypto.as_ref() {
+            Some(c) => materialize_encrypted(&manifest, &backup, c, domain, rel, &out_dir, nice),
+            None => materialize_db(&manifest, &backup, domain, rel, &out_dir, nice),
+        };
+        let Some((local, sha256, size)) = mat else { continue };
         let count = match kind {
             "sms"       => { sms = parse_ios_sms(&local);        sms.len() as i64 }
             "contacts"  => { contacts = parse_ios_contacts(&local); contacts.len() as i64 }
@@ -357,7 +405,9 @@ pub fn analyze_ios_backup(case_id: String, backup_path: String, output_dir: Stri
             "Sauvegarde iOS analysée — {} SMS, {} appels, {} contacts, {} URL, {} comptes, {} géoloc ({} fichiers inventoriés)",
             sms.len(), calls.len(), contacts.len(), browser.len(), accounts.len(), locations.len(), file_total
         ),
-        "encrypted": false,
+        "encrypted": info.encrypted,
+        "decrypted": info.encrypted,
+        "success": true,
         "case_id": case_id,
         "serial": info.serial,
         "ios_info": info,
@@ -503,7 +553,7 @@ pub fn create_ios_backup(case_id: String, udid: String, output_dir: String) -> R
     };
 
     // Analyser la sauvegarde produite (même pipeline que l'import iTunes/Finder)
-    let mut parsed = analyze_ios_backup(case_id, backup_dir.to_string_lossy().to_string(), output_dir)?;
+    let mut parsed = analyze_ios_backup(case_id, backup_dir.to_string_lossy().to_string(), output_dir, None)?;
     if let Some(obj) = parsed.as_object_mut() {
         obj.insert("acquisition".into(), serde_json::json!("LIVE_IDEVICEBACKUP2"));
         obj.insert("live_backup_dir".into(), serde_json::json!(backup_dir.to_string_lossy()));
@@ -562,7 +612,7 @@ mod tests {
         }
 
         let out = root.join("out");
-        let r = analyze_ios_backup("CASE-IOS".into(), root.to_string_lossy().to_string(), out.to_string_lossy().to_string())
+        let r = analyze_ios_backup("CASE-IOS".into(), root.to_string_lossy().to_string(), out.to_string_lossy().to_string(), None)
             .expect("analyse sauvegarde iOS");
         assert_eq!(r["encrypted"], false);
         assert_eq!(r["totals"]["sms"], 1, "1 SMS décodé");

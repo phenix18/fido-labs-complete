@@ -1,6 +1,7 @@
 // MOBILE EXTRACTOR mod.rs v3
 pub mod android;
 pub mod ios;
+pub mod ios_crypto;
 pub mod advanced;
 
 use serde::{Deserialize, Serialize};
