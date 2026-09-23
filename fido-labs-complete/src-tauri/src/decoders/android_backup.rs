@@ -142,6 +142,146 @@ pub fn parse_android_backup(case_id: String, ab_path: String, output_dir: String
     }))
 }
 
+// ─── DÉCODAGE PROFOND D'UNE BASE TROUVÉE (.ab ou dump) ───────────────────────
+// Identifie le schéma d'une base SQLite (WhatsApp ancien/récent, SMS Android, sinon
+// générique) et renvoie les messages en clair. Usage : bouton « Décoder » sur une base
+// listée après le déballage d'un .ab, ou sur toute base issue d'un dump physique.
+
+fn ms_to_str(ms: i64) -> String {
+    use chrono::TimeZone;
+    chrono::Utc.timestamp_millis_opt(ms).single()
+        .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| ms.to_string())
+}
+
+fn list_tables(conn: &rusqlite::Connection) -> Vec<String> {
+    let mut v = Vec::new();
+    if let Ok(mut s) = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'") {
+        if let Ok(rows) = s.query_map([], |r| r.get::<_, String>(0)) {
+            for r in rows.flatten() { v.push(r); }
+        }
+    }
+    v
+}
+
+fn column_exists(conn: &rusqlite::Connection, table: &str, col: &str) -> bool {
+    if let Ok(mut s) = conn.prepare(&format!("PRAGMA table_info(\"{}\")", table)) {
+        if let Ok(rows) = s.query_map([], |r| r.get::<_, String>(1)) {
+            return rows.flatten().any(|c| c == col);
+        }
+    }
+    false
+}
+
+fn decode_whatsapp_old(conn: &rusqlite::Connection) -> Vec<serde_json::Value> {
+    let q = "SELECT m.timestamp, m.key_from_me, m.key_remote_jid, COALESCE(m.data,''), \
+             COALESCE(c.subject, m.key_remote_jid) \
+             FROM messages m LEFT JOIN chat_list c ON c.key_remote_jid = m.key_remote_jid \
+             WHERE m.data IS NOT NULL AND m.data <> '' ORDER BY m.timestamp DESC LIMIT 3000";
+    let mut out = Vec::new();
+    if let Ok(mut s) = conn.prepare(q) {
+        if let Ok(rows) = s.query_map([], |r| {
+            let ts: i64 = r.get(0).unwrap_or(0);
+            let from_me: i64 = r.get(1).unwrap_or(0);
+            let jid: String = r.get(2).unwrap_or_default();
+            Ok(serde_json::json!({
+                "date": ms_to_str(ts),
+                "from": if from_me == 1 { "moi".into() } else { jid.clone() },
+                "to": if from_me == 1 { jid } else { "moi".into() },
+                "direction": if from_me == 1 { "Envoyé" } else { "Reçu" },
+                "body": r.get::<_, String>(3).unwrap_or_default(),
+                "chat": r.get::<_, String>(4).unwrap_or_default(),
+            }))
+        }) { for r in rows.flatten() { out.push(r); } }
+    }
+    out
+}
+
+fn decode_whatsapp_new(conn: &rusqlite::Connection) -> Vec<serde_json::Value> {
+    let q = "SELECT m.timestamp, m.from_me, COALESCE(m.text_data,''), COALESCE(j.raw_string,'') \
+             FROM message m LEFT JOIN chat c ON m.chat_row_id = c._id \
+             LEFT JOIN jid j ON c.jid_row_id = j._id \
+             WHERE m.text_data IS NOT NULL AND m.text_data <> '' ORDER BY m.timestamp DESC LIMIT 3000";
+    let mut out = Vec::new();
+    if let Ok(mut s) = conn.prepare(q) {
+        if let Ok(rows) = s.query_map([], |r| {
+            let ts: i64 = r.get(0).unwrap_or(0);
+            let from_me: i64 = r.get(1).unwrap_or(0);
+            let jid: String = r.get(3).unwrap_or_default();
+            Ok(serde_json::json!({
+                "date": ms_to_str(ts),
+                "from": if from_me == 1 { "moi".into() } else { jid.clone() },
+                "to": if from_me == 1 { jid } else { "moi".into() },
+                "direction": if from_me == 1 { "Envoyé" } else { "Reçu" },
+                "body": r.get::<_, String>(2).unwrap_or_default(),
+                "chat": jid_short(&r.get::<_, String>(3).unwrap_or_default()),
+            }))
+        }) { for r in rows.flatten() { out.push(r); } }
+    }
+    out
+}
+
+fn jid_short(raw: &str) -> String { raw.split('@').next().unwrap_or(raw).to_string() }
+
+fn decode_android_sms(conn: &rusqlite::Connection) -> Vec<serde_json::Value> {
+    let q = "SELECT date, address, COALESCE(body,''), type FROM sms ORDER BY date DESC LIMIT 5000";
+    let mut out = Vec::new();
+    if let Ok(mut s) = conn.prepare(q) {
+        if let Ok(rows) = s.query_map([], |r| {
+            let ts: i64 = r.get(0).unwrap_or(0);
+            let addr: String = r.get(1).unwrap_or_default();
+            let typ: i64 = r.get(3).unwrap_or(0);
+            let received = typ == 1;
+            Ok(serde_json::json!({
+                "date": ms_to_str(ts),
+                "from": if received { addr.clone() } else { "moi".into() },
+                "to": if received { "moi".into() } else { addr.clone() },
+                "direction": if received { "Reçu" } else { "Envoyé" },
+                "body": r.get::<_, String>(2).unwrap_or_default(),
+                "chat": addr,
+            }))
+        }) { for r in rows.flatten() { out.push(r); } }
+    }
+    out
+}
+
+/// Décode une base SQLite trouvée (WhatsApp / SMS) en messages lisibles ; sinon
+/// renvoie un résumé des tables. Lecture SEULE (la preuve n'est pas modifiée).
+#[tauri::command]
+pub fn decode_database(db_path: String) -> Result<serde_json::Value, String> {
+    let conn = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    ).map_err(|e| format!("Ouverture {} : {}", db_path, e))?;
+
+    let tables = list_tables(&conn);
+    let has = |t: &str| tables.iter().any(|x| x == t);
+
+    if has("messages") && column_exists(&conn, "messages", "key_remote_jid") {
+        let m = decode_whatsapp_old(&conn);
+        return Ok(serde_json::json!({ "type": "WhatsApp (msgstore)", "kind": "whatsapp", "count": m.len(), "messages": m }));
+    }
+    if has("message") && has("jid") {
+        let m = decode_whatsapp_new(&conn);
+        return Ok(serde_json::json!({ "type": "WhatsApp (msgstore récent)", "kind": "whatsapp", "count": m.len(), "messages": m }));
+    }
+    if has("sms") {
+        let m = decode_android_sms(&conn);
+        return Ok(serde_json::json!({ "type": "SMS Android (mmssms)", "kind": "sms", "count": m.len(), "messages": m }));
+    }
+
+    // Base inconnue : résumé des tables + nb de lignes.
+    let mut summary = Vec::new();
+    for t in &tables {
+        let n: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM \"{}\"", t), [], |r| r.get(0)).unwrap_or(-1);
+        summary.push(serde_json::json!({ "table": t, "rows": n }));
+    }
+    Ok(serde_json::json!({
+        "type": "Base SQLite (schéma non reconnu)", "kind": "generic",
+        "count": 0, "messages": [], "tables": summary,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +327,46 @@ mod tests {
         assert_eq!(dbs.len(), 1, "1 base SQLite détectée");
         assert_eq!(dbs[0]["sha256"].as_str().unwrap().len(), 64);
         assert!(r["apps"].as_array().unwrap().iter().any(|a| a["package"] == "com.test.app"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn decode_whatsapp_et_sms() {
+        let dir = std::env::temp_dir().join(format!("fido_decode_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // WhatsApp ancien schéma (messages + chat_list)
+        let wa = dir.join("msgstore.db");
+        {
+            let c = rusqlite::Connection::open(&wa).unwrap();
+            c.execute_batch(
+                "CREATE TABLE chat_list(key_remote_jid TEXT, subject TEXT);
+                 CREATE TABLE messages(key_id TEXT, timestamp INTEGER, key_remote_jid TEXT, key_from_me INTEGER, data TEXT, media_wa_type INTEGER);
+                 INSERT INTO chat_list VALUES('22670123456@s.whatsapp.net','Moussa');
+                 INSERT INTO messages VALUES('k1',1710490991000,'22670123456@s.whatsapp.net',0,'Ok je transfere',0);
+                 INSERT INTO messages VALUES('k2',1710491001000,'22670123456@s.whatsapp.net',1,'Recu merci',0);"
+            ).unwrap();
+        }
+        let r = decode_database(wa.to_string_lossy().to_string()).expect("decode wa");
+        assert_eq!(r["kind"], "whatsapp");
+        assert_eq!(r["count"], 2);
+        assert!(r["messages"][0]["body"].as_str().unwrap().len() > 0);
+
+        // SMS Android (mmssms → table sms)
+        let sms = dir.join("mmssms.db");
+        {
+            let c = rusqlite::Connection::open(&sms).unwrap();
+            c.execute_batch(
+                "CREATE TABLE sms(_id INTEGER PRIMARY KEY, address TEXT, body TEXT, date INTEGER, type INTEGER);
+                 INSERT INTO sms(address,body,date,type) VALUES('+22670123456','Rendez-vous 20h',1710490800000,1);"
+            ).unwrap();
+        }
+        let r2 = decode_database(sms.to_string_lossy().to_string()).expect("decode sms");
+        assert_eq!(r2["kind"], "sms");
+        assert_eq!(r2["count"], 1);
+        assert_eq!(r2["messages"][0]["direction"], "Reçu");
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 
