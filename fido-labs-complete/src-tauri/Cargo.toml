@@ -33,6 +33,8 @@ aes = "0.8"
 cbc = "0.1"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha1 = "0.10"
+aes-gcm = "0.10"
+hmac = "0.12"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -62,6 +62,7 @@ fn main() {
             extractors::disk::verify_image,
             // === DÉCODEURS ===
             decoders::whatsapp::parse_whatsapp_db,
+            decoders::whatsapp::decrypt_whatsapp_backup,
             decoders::orange_money::parse_mobile_money,
             decoders::orange_money::scan_money_from_messages,
             decoders::file_carver::carve_files,
