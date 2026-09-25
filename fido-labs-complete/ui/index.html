@@ -30,6 +30,19 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .nav-badge{margin-left:auto;background:var(--accent);color:#0a0c12;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:700;font-family:var(--mono);flex-shrink:0}
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #topbar{height:var(--th);min-height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0}
+#menubar{height:32px;min-height:32px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:2px;padding:0 10px;flex-shrink:0;position:relative;z-index:60;-webkit-user-select:none;user-select:none}
+#menubar .mb-brand{font-weight:800;letter-spacing:.04em;color:var(--accent);font-size:12px;margin-right:12px}
+.mb-menu{position:relative}
+.mb-btn{background:transparent;border:none;color:var(--text);font-size:12.5px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit}
+.mb-btn:hover,.mb-btn.open{background:var(--surface2)}
+.mb-drop{position:absolute;top:calc(100% + 2px);left:0;min-width:230px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.30);padding:6px;display:none;z-index:70}
+.mb-drop.open{display:block}
+.mb-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-size:12.5px;padding:7px 10px;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.mb-item:hover{background:var(--surface2)}
+.mb-item .mb-key{margin-left:auto;color:var(--faint);font-size:10.5px;padding-left:16px}
+.mb-sep{height:1px;background:var(--border);margin:5px 4px}
+.ab-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;margin-top:8px}
+.ab-grid .k{color:var(--muted)}.ab-grid .v{font-family:var(--mono)}
 #topbar .tt{font-size:13px;font-weight:600}
 #topbar .spacer{flex:1}
 .lc-badge{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);cursor:pointer;border:1px solid var(--border)}
@@ -189,6 +202,40 @@ tbody tr:hover{background:var(--surface2)}
 </nav>
 
 <div id="main">
+  <div id="menubar">
+    <span class="mb-brand">🛡 FIDO-LABS</span>
+    <div class="mb-menu"><button class="mb-btn" onclick="mbToggle(event,'m-fichiers')">Fichiers</button>
+      <div class="mb-drop" id="m-fichiers">
+        <button class="mb-item" onclick="mbAction('newSession')">🆕 Nouvelle session<span class="mb-key">Ctrl+N</span></button>
+        <button class="mb-item" onclick="mbAction('openSession')">📂 Ouvrir une session…<span class="mb-key">Ctrl+O</span></button>
+        <button class="mb-item" onclick="mbAction('sessions')">🗂️ Sessions récentes</button>
+        <div class="mb-sep"></div>
+        <button class="mb-item" onclick="mbAction('scanUsb')">⚡ Scan USB</button>
+        <button class="mb-item" onclick="mbAction('report')">📄 Générer un rapport…</button>
+        <div class="mb-sep"></div>
+        <button class="mb-item" onclick="mbAction('quit')">✖ Quitter</button>
+      </div></div>
+    <div class="mb-menu"><button class="mb-btn" onclick="mbToggle(event,'m-affichage')">Affichage</button>
+      <div class="mb-drop" id="m-affichage">
+        <button class="mb-item" onclick="mbAction('theme')">🌓 Thème clair / sombre<span class="mb-key">Ctrl+D</span></button>
+        <button class="mb-item" onclick="mbAction('sidebar')">↔️ Menu latéral</button>
+        <button class="mb-item" onclick="mbAction('console')">🖥️ Console<span class="mb-key">Ctrl+`</span></button>
+        <button class="mb-item" onclick="mbAction('fullscreen')">⛶ Plein écran<span class="mb-key">F11</span></button>
+        <div class="mb-sep"></div>
+        <button class="mb-item" onclick="mbAction('dashboard')">🏠 Tableau de bord</button>
+      </div></div>
+    <div class="mb-menu"><button class="mb-btn" onclick="mbToggle(event,'m-aide')">Aide</button>
+      <div class="mb-drop" id="m-aide">
+        <button class="mb-item" onclick="mbAction('guide')">📘 Guide d'utilisation</button>
+        <button class="mb-item" onclick="mbAction('shortcuts')">⌨️ Raccourcis clavier</button>
+        <button class="mb-item" onclick="mbAction('website')">🌐 Site web & support</button>
+      </div></div>
+    <div class="mb-menu"><button class="mb-btn" onclick="mbToggle(event,'m-apropos')">À propos</button>
+      <div class="mb-drop" id="m-apropos">
+        <button class="mb-item" onclick="mbAction('about')">ℹ️ À propos de FIDO-LABS</button>
+        <button class="mb-item" onclick="mbAction('license')">🔑 Licence & modules</button>
+      </div></div>
+  </div>
   <div id="topbar">
     <span class="tt" id="topbar-title">Dashboard</span>
     <div class="spacer"></div>
@@ -815,6 +862,29 @@ tbody tr:hover{background:var(--surface2)}
     <div class="modal-footer" style="margin-top:12px"><button class="btn btn-ghost" onclick="stepImg(-1)">◀ Préc.</button><button class="btn btn-ghost" onclick="stepImg(1)">Suiv. ▶</button><button class="btn btn-accent" onclick="closeModal('modal-img')">Fermer</button></div>
   </div>
 </div>
+<div id="modal-session" class="modal-layer" hidden onclick="if(event.target===this)closeModal('modal-session')">
+  <div class="modal" style="max-width:640px">
+    <h3>📂 Ouvrir une session</h3>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Sessions (dossiers d'enquête) enregistrées localement sur cette machine. Sélectionnez-en une pour la rendre active.</div>
+    <div class="twrap" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Référence</th><th>Nom</th><th>Créée le</th><th>Statut</th><th></th></tr></thead><tbody id="sess-list"><tr><td colspan="5" style="text-align:center;color:var(--muted)">—</td></tr></tbody></table></div>
+    <div class="modal-footer" style="margin-top:12px"><button class="btn btn-ghost" onclick="closeModal('modal-session')">Fermer</button><button class="btn btn-accent" onclick="closeModal('modal-session');openCaseModal()">🆕 Nouvelle session</button></div>
+  </div>
+</div>
+<div id="modal-about" class="modal-layer" hidden onclick="if(event.target===this)closeModal('modal-about')">
+  <div class="modal" style="max-width:520px">
+    <div style="display:flex;align-items:center;gap:12px"><div style="font-size:34px">🛡</div><div><h3 style="margin:0" id="ab-name">FIDO-LABS</h3><div style="font-size:11.5px;color:var(--muted)" id="ab-tag">Forensic Integrated Data Operator</div></div></div>
+    <div class="ab-grid" id="ab-grid"></div>
+    <div id="ab-features" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+    <div class="modal-footer" style="margin-top:14px"><button class="btn btn-accent" onclick="closeModal('modal-about')">Fermer</button></div>
+  </div>
+</div>
+<div id="modal-help" class="modal-layer" hidden onclick="if(event.target===this)closeModal('modal-help')">
+  <div class="modal" style="max-width:640px;max-height:82vh;overflow:auto">
+    <h3 id="help-title">📘 Guide d'utilisation</h3>
+    <div id="help-body" style="font-size:12.5px;line-height:1.65"></div>
+    <div class="modal-footer" style="margin-top:14px"><button class="btn btn-accent" onclick="closeModal('modal-help')">Fermer</button></div>
+  </div>
+</div>
 <div id="chart-tooltip" class="chart-tooltip"></div>
 <script>
 
@@ -892,6 +962,8 @@ function demoInvoke(cmd,a){
     get_timeline_events:async(a2)=>([{id:'ev1',timestamp:'2024-03-15T08:23:11Z',source:'WHATSAPP',event_type:'MESSAGE',description:'Message: "Ok je transfère"',actor:'+22670123456',target:'moi',evidence_path:'msgstore.db:row_1024',case_id:a2.case_id||''},{id:'ev2',timestamp:'2024-03-15T08:45:00Z',source:'MONEY',event_type:'TRANSACTION',description:'Orange 150,000 FCFA',actor:'+22670123456',target:'moi',evidence_path:'sms.db:row_88',case_id:a2.case_id||''},{id:'ev3',timestamp:'2024-03-15T09:12:33Z',source:'MOBILE_ADB',event_type:'APP_EVENT',description:'App installée: com.vpn.tool',actor:'device',target:'system',evidence_path:'packages.xml',case_id:a2.case_id||''}]),
     get_audit_log:async(a2)=>([{id:'a1',timestamp:new Date().toISOString(),operator:S.operator,action:'DETECT_DEVICE',target:'ADB:R3CT203BXHJ',hash:'a3f8c1d200000000',case_id:a2.case_id||'demo'}]),
     log_action:async()=>'logged-'+Date.now(),
+    get_app_info:async()=>({name:'FIDO-LABS',version:'3.0.0',build:'2026.09.25',codename:'Forensic Phoenix',author:'FIDO-LABS Team',website:'https://fido-labs.com',support_email:'support@fido-labs.com',license:'Proprietary — Usage réglementé',copyright:'© 2026 FIDO-LABS — Tous droits réservés',features:['Extraction Mobile (ADB / BROM / EDL)','Extraction & déchiffrement iOS/Android','Décodeur WhatsApp / SMS & Mobile Money','Timeline fusionnée, Graphes de liens, Data Analyse','Rapports PDF scellés SHA256']}),
+    get_keyboard_shortcuts:async()=>([{keys:'Ctrl + N',description:'Nouvelle session'},{keys:'Ctrl + O',description:'Ouvrir une session'},{keys:'Ctrl + D',description:'Basculer le thème'},{keys:'Ctrl + `',description:'Console (afficher/masquer)'},{keys:'F11',description:'Plein écran'},{keys:'Échap',description:'Fermer une fenêtre'}]),
     export_chain_of_custody:async(a2)=>`Rapport exporté: ${a2.output_path}`,
     activate_license:async(a2)=>{const m={Standard:['mobile_logical','sdcard_image','sdcard_carve','disk_dd','whatsapp','reports','csm','calendar','cartography','filters','reports_gen'],Pro:['mobile_logical','mobile_brom','sdcard_image','sdcard_carve','disk_dd','disk_e01','disk_carve','whatsapp','money_flow','timeline','link_graph','yara','reports','csm','calendar','cartography','filters','reports_gen'],Site:['mobile_logical','mobile_brom','sdcard_image','sdcard_carve','disk_dd','disk_e01','disk_carve','whatsapp','money_flow','timeline','link_graph','yara','reports','csm','calendar','cartography','filters','reports_gen','multi_seat','api_access']};
       return {key:a2.key,tier:a2.tier,licensee:a2.licensee,operator_name:a2.operator_name,seats:a2.tier==='Site'?9999:1,issued_at:new Date().toISOString(),expires_at:a2.expires_at,days_remaining:365,valid:true,modules:m[a2.tier]||m.Standard,hardware_id:'DEMO-HW-0000'}},
@@ -1051,6 +1123,18 @@ function log(type,msg){const o=document.getElementById('termout');const ts=new D
 function clearTerm(){document.getElementById('termout').innerHTML=''}
 function nav(pg){S.currentPage=pg;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg)?.classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.querySelector(`.nav-item[onclick*="${pg}"]`)?.classList.add('active');const T={dashboard:'Dashboard',cases:'Dossiers',mobile:'Mobile',sdcard:'Carte SD',disk:'Disque',whatsapp:'WhatsApp',money:'Money Flow',timeline:'Timeline',calendar:'Calendrier',csm:'Chain Custody',carto:'Cartographie',graphes:'Graphes','data-analysis':'Data Analyse',filtres:'Filtres',rapports:'Rapports',audit:'Audit',licence:'Licence',settings:'Paramètres'};document.getElementById('topbar-title').textContent=T[pg]||pg;if(pg==='licence')loadLic();if(pg==='cases')loadCases();if(pg==='calendar')loadCalendar();if(pg==='csm')loadCSM();if(pg==='carto')loadCarto();if(pg==='graphes')buildLinkGraph();if(pg==='data-analysis')loadDataAnalysis();if(pg==='filtres')loadFilters();if(pg==='rapports')loadReports();if(pg==='audit')loadAudit();if(pg==='timeline')loadTlSel()}
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('expanded')}
+function applyTheme(t){const r=document.documentElement;if(t==='light'||t==='dark')r.setAttribute('data-theme',t);else r.removeAttribute('data-theme');try{localStorage.setItem('fido_theme',t||'auto')}catch(e){}}
+function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme');const isDark=cur?cur==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;applyTheme(isDark?'light':'dark');toast('Thème '+(isDark?'clair':'sombre'),'ok')}
+function toggleConsole(){const t=document.getElementById('terminal');if(!t)return;t.style.display=(getComputedStyle(t).display==='none')?'flex':'none'}
+function mbCloseAll(){document.querySelectorAll('#menubar .mb-drop.open').forEach(d=>d.classList.remove('open'));document.querySelectorAll('#menubar .mb-btn.open').forEach(b=>b.classList.remove('open'))}
+function mbToggle(ev,id){ev.stopPropagation();const d=document.getElementById(id);const was=d.classList.contains('open');mbCloseAll();if(!was){d.classList.add('open');ev.currentTarget.classList.add('open')}}
+function mbAction(a){mbCloseAll();switch(a){case'newSession':openCaseModal();break;case'openSession':case'sessions':openSessionModal();break;case'scanUsb':detectDevice();break;case'report':nav('rapports');try{openReportModal()}catch(e){}break;case'quit':if(confirm('Quitter FIDO-LABS ?')){try{const w=window.__TAURI__&&window.__TAURI__.window;if(w&&w.getCurrentWindow){w.getCurrentWindow().close()}else if(w&&w.appWindow){w.appWindow.close()}else{window.close()}}catch(e){toast('Fermez la fenêtre manuellement','wrn')}}break;case'theme':toggleTheme();break;case'sidebar':toggleSidebar();break;case'console':toggleConsole();break;case'fullscreen':try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}break;case'dashboard':nav('dashboard');break;case'guide':showGuide();break;case'shortcuts':showShortcuts();break;case'website':showWebsite();break;case'about':showAbout();break;case'license':nav('licence');break;}}
+async function openSessionModal(){openModal('modal-session');try{await loadCases()}catch(e){}const tb=document.getElementById('sess-list');const cs=S.cases||[];if(!cs.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Aucune session locale. Créez-en une avec « Nouvelle session ».</td></tr>';return}tb.innerHTML=cs.map(c=>`<tr><td class="mono">${esc(c.reference)}</td><td>${esc(c.name)}</td><td class="mono">${new Date(c.created_at).toLocaleDateString('fr-FR')}</td><td><span class="pill ${c.status==='OUVERT'?'pill-green':c.status==='ARCHIVE'?'pill-muted':'pill-red'}">${esc(c.status)}</span></td><td><button class="btn btn-accent btn-sm" onclick="openSession('${esc(c.id)}')">Ouvrir</button></td></tr>`).join('')}
+function openSession(id){const c=(S.cases||[]).find(x=>x.id===id);S.activeCaseId=id;toast('Session ouverte : '+((c&&c.name)||id),'ok');log('acc','Session ouverte : '+((c&&c.reference)||id));closeModal('modal-session');nav('dashboard')}
+async function showAbout(){openModal('modal-about');let a={};try{a=(await invoke('get_app_info',{}))||{}}catch(e){a={}}const hw=(S.license&&S.license.hardware_id)||'—';const tier=(S.license&&S.license.tier)||'';const rows=[['Nom',a.name||'FIDO-LABS'],['Version',(a.version||'3.0.0')],['Nom de code',a.codename||'—'],['Build',a.build||'—'],['Licence active',tier||(a.license||'—')],['Auteur',a.author||'FIDO-LABS Team'],['Support',a.support_email||'—'],['ID machine',hw]];document.getElementById('ab-name').textContent=a.name||'FIDO-LABS';document.getElementById('ab-tag').textContent='Forensic Integrated Data Operator'+(a.codename?(' · '+a.codename):'');document.getElementById('ab-grid').innerHTML=rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(r[1])}</div>`).join('');const f=a.features||[];document.getElementById('ab-features').innerHTML=(f.length?('<div style="font-weight:600;color:var(--text);margin:2px 0 4px">Capacités</div>'+f.map(x=>'• '+esc(x)).join('<br>')):'')+`<div style="margin-top:8px;color:var(--faint)">${esc(a.copyright||'© FIDO-LABS')}</div>`}
+function showGuide(){document.getElementById('help-title').textContent='📘 Guide d\'utilisation';document.getElementById('help-body').innerHTML=`<ol style="padding-left:18px;margin:0"><li><b>Créer une session</b> : Fichiers → Nouvelle session (un dossier d'enquête horodaté).</li><li><b>Brancher l'appareil</b> puis <b>Mobile → Identifier</b> : détection de l'état (allumé/verrouillé/éteint/non autorisé) et des méthodes disponibles, sans contournement.</li><li><b>Extraction</b> : logique (ADB), médias, physique MediaTek (BROM) / Qualcomm (EDL) selon l'état.</li><li><b>iPhone</b> : analyse d'une sauvegarde iTunes/Finder ou acquisition en direct ; sauvegardes chiffrées → mot de passe légal.</li><li><b>Sauvegarde Android .ab</b> : déballer/déchiffrer, puis <b>Décoder</b> les bases (WhatsApp/SMS).</li><li><b>Analyse</b> : Money Flow (mots-clés), Timeline fusionnée, Graphes de liens, Data Analyse.</li><li><b>Rapport</b> : PDF scellé SHA256 avec chaîne de garde.</li></ol><div style="margin-top:8px;color:var(--muted);font-size:11.5px">Usage strictement légal, sous autorisation. L'outil documente les méthodes physiques mais ne casse ni le verrou ni le chiffrement.</div>`;openModal('modal-help')}
+async function showShortcuts(){document.getElementById('help-title').textContent='⌨️ Raccourcis clavier';let list=[['Ctrl + N','Nouvelle session'],['Ctrl + O','Ouvrir une session'],['Ctrl + D','Basculer le thème'],['Ctrl + `','Console (afficher/masquer)'],['F11','Plein écran'],['Échap','Fermer une fenêtre']];try{const s=await invoke('get_keyboard_shortcuts',{});if(Array.isArray(s)&&s.length)list=s.map(x=>[x.keys||x.shortcut||x.key||'',x.description||x.action||x.name||''])}catch(e){}document.getElementById('help-body').innerHTML='<div class="ab-grid">'+list.map(r=>`<div class="v">${esc(r[0])}</div><div class="k">${esc(r[1])}</div>`).join('')+'</div>';openModal('modal-help')}
+function showWebsite(){toast('fido-labs.com · support@fido-labs.com','ok');log('inf','Site web : https://fido-labs.com — support@fido-labs.com')}
 function toast(msg,type='ok'){const e=document.createElement('div');e.className='toast '+type;e.textContent=msg;document.body.appendChild(e);setTimeout(()=>e.remove(),3500)}
 function showInfo(msg){toast(msg,'wrn');log('wrn',msg)}
 function chkMod(id){if(S.license.modules.includes(id))return true;toast(`Module "${id}" non inclus en licence ${S.license.tier}. Upgradez Pro/Site.`,'wrn');log('wrn',`Accès refusé: ${id} — ${S.license.tier}`);return false}
@@ -1418,7 +1502,9 @@ function openReportModal(){openModal('modal-rpt');document.getElementById('modal
 function closeRpt(){closeModal('modal-rpt')}
 async function generateReport(){const n=document.getElementById('rpt-name').value.trim();if(!n){toast('Nom requis','err');return}log('acc',`Rapport: ${n}`);try{const r=await invoke('generate_report',{name:n,report_type:document.getElementById('rpt-type').value,format:document.getElementById('rpt-format').value,case_id:S.activeCaseId||'',author:S.operator,filters_json:document.getElementById('rpt-filters').value});await invoke('log_action',{operator:S.operator,action:'GENERATE_REPORT',target:n,case_id:S.activeCaseId||''});closeRpt();toast(`Rapport généré: ${n}`,'ok');log('ok',r.id);S.reports.push(r);renderReports()}catch(e){toast('Erreur: '+e,'err');log('err',e)}}
 function animateBar(id,from,to,dur){const el=document.getElementById(id);if(!el)return;const start=performance.now();function step(now){const p=Math.min((now-start)/dur,1);el.style.width=(from+(to-from)*p)+'%';if(p<1)requestAnimationFrame(step)}requestAnimationFrame(step)}
-document.addEventListener('DOMContentLoaded',async function(){log('inf','FIDO-LABS v3.0 — Démarrage...');try{const saved=JSON.parse(localStorage.getItem('fido_settings')||'{}');if(saved.operator){S.operator=saved.operator;document.getElementById('sop').value=saved.operator}}catch(e){}const next=new Date();next.setFullYear(next.getFullYear()+1);document.getElementById('acexp').value=next.toISOString().slice(0,10);document.getElementById('cal-week').value=new Date().toISOString().slice(0,10).replace(/-/g,'/');try{const lic=await invoke('get_license_status',{app_dir:await appDir()});if(lic){S.license=lic;updateLic(lic)}}catch(e){}await loadCases();log('ok',`Licence: ${S.license.tier} — Modules: ${S.license.modules.length}`);log('acc','FIDO-LABS v3.0 prêt.')});
+document.addEventListener('click',()=>mbCloseAll());
+document.addEventListener('keydown',function(e){const mod=e.ctrlKey||e.metaKey;const k=(e.key||'').toLowerCase();if(mod&&k==='n'){e.preventDefault();openCaseModal()}else if(mod&&k==='o'){e.preventDefault();openSessionModal()}else if(mod&&k==='d'){e.preventDefault();toggleTheme()}else if(mod&&e.key==='`'){e.preventDefault();toggleConsole()}else if(e.key==='F11'){e.preventDefault();try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(_){}}else if(e.key==='Escape'){document.querySelectorAll('.modal-layer:not([hidden])').forEach(m=>{if(m.id!=='modal-img')m.hidden=true});mbCloseAll()}});
+document.addEventListener('DOMContentLoaded',async function(){log('inf','FIDO-LABS v3.0 — Démarrage...');try{const th=localStorage.getItem('fido_theme');if(th&&th!=='auto')applyTheme(th)}catch(e){}try{const saved=JSON.parse(localStorage.getItem('fido_settings')||'{}');if(saved.operator){S.operator=saved.operator;document.getElementById('sop').value=saved.operator}}catch(e){}const next=new Date();next.setFullYear(next.getFullYear()+1);document.getElementById('acexp').value=next.toISOString().slice(0,10);document.getElementById('cal-week').value=new Date().toISOString().slice(0,10).replace(/-/g,'/');try{const lic=await invoke('get_license_status',{app_dir:await appDir()});if(lic){S.license=lic;updateLic(lic)}}catch(e){}await loadCases();log('ok',`Licence: ${S.license.tier} — Modules: ${S.license.modules.length}`);log('acc','FIDO-LABS v3.0 prêt.')});
 </script>
 </body>
 </html>
