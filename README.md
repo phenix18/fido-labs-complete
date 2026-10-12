@@ -1,43 +1,34 @@
 # FIDO-LABS v3.0 (Web Edition)
 
-## Plateforme Forensique Intégrée — Extraction & Analyse
+## Plateforme Forensique Intégrée — Extraction, Analyse & Gestion Judiciaire
 
-FIDO-LABS v3 est une suite d'investigation numérique médico-légale et de veille forensique, conçue pour opérer en environnement web local et autonome.
+FIDO-LABS v3 est une suite d'investigation numérique médico-légale et de veille forensique pour terminaux mobiles et supports de stockage, conçue pour opérer en environnement web local et autonome.
 
-### Modules & Capacités
-- **Tableau de Bord & Dossiers** : Gestion des sessions et dossiers d'enquête scellés, suivi d'activité et statuts des appareils.
-- **Extraction Mobile** :
-  - Identification automatique de l'état (allumé, verrouillé, BFU, AFU, écran cassé)
-  - Extraction logique ADB (contacts, SMS, appels, comptes, médias, inventaire complet)
-  - Planification d'acquisition sur appareils verrouillés (BROM MediaTek, EDL Qualcomm 9008, profil checkm8 iOS A5–A11)
-  - Déballage et parsing de sauvegardes Android (`.ab`) et sauvegardes iOS (iTunes / Finder)
-  - Analyse d'artefacts ALEAPP
-- **Supports Amovibles & Disques** :
-  - Imagerie bit-à-bit carte SD et disque physique (DD brut, E01) avec intégrité SHA256
-  - File Carving forensique (reconstitution de photos, vidéos, documents et bases SQLite)
-- **Décodeur WhatsApp & SQLite** :
-  - Déchiffrement de bases `msgstore.db.crypt14` / `.crypt15` avec clé légale
-  - Restauration et décodage d'enregistrements effacés (freeblocks / unallocated space)
-- **Money Flow & Analyse Financière** :
-  - Détection automatique et extraction des flux Mobile Money (Orange Money, Wave, Moov, MTN MoMo)
-  - Matrice des transactions et graphe relationnel des flux financiers
-- **Timeline & Cartographie** :
-  - Chronologie unifiée multi-sources (appels, SMS, WhatsApp, transactions, logs système)
-  - Visualisation cartographique des coordonnées géographiques extraites
-- **Graphes Relationnels & Data Analyse** :
-  - Graphes de liens de communications et détection d'anomalies
-  - Tableaux de bord analytiques avec diagrammes en camembert / anneau et répartition des preuves
-- **Chaîne de Garde (CSM), Filtres & Rapports** :
-  - Gestion rigoureuse de la chaîne de garde (Chain of Custody) horodatée
-  - Filtres multi-critères et journal d'audit scellé
-  - Modèles et génération de rapports d'expertise (PDF scellé SHA256)
+### Nouveautés : Sauvegarde Automatique & Gestion Enrichie des Dossiers
+- **💾 Sauvegarde Automatique après chaque Extraction** :
+  - Dès qu'une extraction se termine (ADB logique, médias/galerie, BROM MediaTek, EDL Qualcomm, sauvegardes iOS/Android), la session complète est automatiquement enregistrée et scellée avec son empreinte **SHA-256**.
+  - Si un dossier est actif, l'extraction lui est directement rattachée. Si aucun dossier n'est ouvert, un dossier de session horodaté est automatiquement généré pour garantir qu'aucune preuve n'est perdue.
+  - Option **"Téléchargement auto vers PC"** : télécharge automatiquement le fichier de session `.json` prêt à être classé dans votre dossier `Documents/FIDO-LABS/Cases/`.
+  - Bouton direct **"📂 Télécharger vers Mes Documents (.json)"** disponible immédiatement sur la fiche de résultat d'extraction.
+- **📁 Gestion de Dossiers & Enrichissement Judiciaire** :
+  - Renseignement complet des métadonnées de procédure : Référence Parquet, Nom de l'Affaire, Juridiction/Tribunal, Personne mise en cause / Suspect, N° de Scellé, Motif/Infraction, Statut de procédure (Ouvert, En cours, Sous scellé, Transmis Parquet, Archivé).
+  - Bouton **"✏️ Modifier / Compléter informations"** pour actualiser ou enrichir un dossier à tout moment.
+  - Historique des **Extractions & Sessions Rattachées** avec rechargement en 1 clic dans l'analyseur.
+  - **Journal des Notes d'Enquête** : ajout d'observations d'enquêteurs, déclarations d'audition et indices recueillis.
+  - **Import / Export de Sessions PC** : bouton **"📥 Importer session (.json)"** pour restaurer n'importe quel dossier ou session sauvegardé sur l'ordinateur.
+
+### Modules Forensiques Intégrés
+- **Extraction Mobile** : Logique ADB, identification automatique AFU/BFU, BROM MediaTek, EDL Qualcomm 9008, profil checkm8 iOS A5–A11, ALEAPP.
+- **Supports Amovibles & Disques** : Imagerie bit-à-bit SD & disque (DD brut, E01) avec intégrité SHA-256 et file carving.
+- **Inspecteur Hexadécimal & Signatures Magiques** : Vue 16 octets/ligne, détection d'en-têtes (SQLite, JPEG, PNG, ZIP, PDF), calcul d'entropie de Shannon et extraction de chaînes (Strings).
+- **Forensique Navigateurs & Données Web** : Historique unifié (Chrome, Safari, Firefox, Edge), recherches web, téléchargements, cookies et jetons de session.
+- **Métadonnées EXIF & Analyse Photo** : Analyse des boîtiers, optiques, détection de retouche logicielle (Photoshop) et géolocalisation GPS.
+- **Contrôle d'Intégrité Hash & IOC** : Calculs MD5/SHA-256, base blanche NSRL (NIST), détection de malwares mobiles et scanner de règles YARA.
+- **Procès-Verbal Judiciaire ISO/IEC 27037** : Rédaction officielle de PV d'examen technique scellé pour réquisition judiciaire avec option d'impression directe.
 
 ### Démarrage
 ```bash
 npm install
 npm run dev
 ```
-L'application démarre sur le port 3000 (`http://localhost:3000`).
-
-### Éthique & Conformité
-Usage strictement légal dans le cadre de réquisitions judiciaires, audits de sécurité et autorisations dûment accordées.
+Accessible sur `http://localhost:3000`.
