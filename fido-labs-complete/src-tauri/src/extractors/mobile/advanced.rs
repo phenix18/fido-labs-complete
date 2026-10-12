@@ -1,5 +1,6 @@
 // ADVANCED MOBILE MODULE v3 - Écran cassé, MDP oublié, Extraction physique + logique
 // Usage légal uniquement avec autorisation judiciaire
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -25,8 +26,8 @@ pub enum ExtractionType {
     // ── LOGIQUE ──
     AdbLogical,           // adb backup / adb pull (app data si root)
     AdbFull,              // adb backup full avec agent APK
-    iTunesBackup,         // iOS - iTunes/Finder backup chiffré ou non
-    iCloudBackup,         // iOS - iCloud (nécessite identifiants légaux)
+    ItunesBackup,         // iOS - iTunes/Finder backup chiffré ou non
+    IcloudBackup,         // iOS - iCloud (nécessite identifiants légaux)
     // ── PHYSIQUE ──
     BromDump,             // MTK BROM - lecture raw flash via test point
     EdlDump,              // Qualcomm EDL 9008 - lecture UFS/eMMC via QFIL
@@ -140,7 +141,7 @@ pub struct DeviceClassification {
 }
 
 fn adb_prop(serial: &str, prop: &str) -> String {
-    Command::new("adb").args(["-s", serial, "shell", "getprop", prop]).output()
+    Command::new(&super::find_adb()).args(["-s", serial, "shell", "getprop", prop]).output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
 }
@@ -148,7 +149,7 @@ fn adb_prop(serial: &str, prop: &str) -> String {
 /// Détection heuristique du verrouillage écran (nécessite ADB autorisé).
 /// Some(true)=verrouillé, Some(false)=déverrouillé, None=indéterminé.
 fn adb_screen_locked(serial: &str) -> Option<bool> {
-    let out = Command::new("adb").args(["-s", serial, "shell", "dumpsys", "window"]).output().ok()?;
+    let out = Command::new(&super::find_adb()).args(["-s", serial, "shell", "dumpsys", "window"]).output().ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
     for (needle, locked) in [
         ("mShowingLockscreen=true", true), ("mShowingLockscreen=false", false),
@@ -169,7 +170,7 @@ pub fn classify_device() -> Result<DeviceClassification, String> {
     let mut notes: Vec<String> = Vec::new();
 
     // 1) État ADB (première ligne d'appareil)
-    let adb_raw = Command::new("adb").args(["devices", "-l"]).output().ok()
+    let adb_raw = Command::new(&super::find_adb()).args(["devices", "-l"]).output().ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
     let dev_line = adb_raw.lines().skip(1).find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
@@ -338,11 +339,11 @@ fn determine_state(vid: &str, pid: &str, adb_out: &str, screen_broken: bool, loc
     }
 }
 
-fn build_extraction_plan(state: &str, screen_broken: bool, locked: bool) -> ExtractionPlan {
+fn build_extraction_plan(state: &str, _screen_broken: bool, _locked: bool) -> ExtractionPlan {
     let mut steps = Vec::new();
     let mut equipment = Vec::new();
     let mut legal = Vec::new();
-    let mut success_rate = 0.0f32;
+    let success_rate;
 
     match state {
         // ── Appareil allumé, déverrouillé ──────────────────────
@@ -529,7 +530,7 @@ fn build_extraction_plan(state: &str, screen_broken: bool, locked: bool) -> Extr
 #[tauri::command]
 pub fn get_broken_screen_options(serial: String) -> Result<BrokenScreenOptions, String> {
     // Tester ADB
-    let adb_ok = Command::new("adb").args(["-s", &serial, "shell", "echo", "ok"]).output()
+    let adb_ok = Command::new(&super::find_adb()).args(["-s", &serial, "shell", "echo", "ok"]).output()
         .map(|o| o.status.success()).unwrap_or(false);
 
     // Tester scrcpy disponible
@@ -562,7 +563,7 @@ pub fn attempt_adb_unlock_navigation(serial: String, device_model: String) -> Re
     let (x, y) = layouts[brand];
 
     // Simuler tap sur position de swipe
-    let result = Command::new("adb")
+    let result = Command::new(&super::find_adb())
         .args(["-s", &serial, "shell", "input", "swipe",
                &x.to_string(), &(y+200).to_string(),
                &x.to_string(), &(y-200).to_string(), "300"])

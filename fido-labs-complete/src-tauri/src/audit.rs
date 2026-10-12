@@ -1,4 +1,5 @@
 // AUDIT LOG v2
+#![allow(static_mut_refs)]
 use rusqlite::{Connection, Result as SqlResult};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -20,11 +21,9 @@ static mut AUDIT_DB_PATH: String = String::new();
 
 pub fn init_audit_db(app_dir: &str) -> SqlResult<()> {
     let p = format!("{}/audit.db", app_dir);
-    unsafe {
-        AUDIT_DB_PATH = p.clone();
-        AUDIT_DB_PATH_PUB = p.clone();
-    }
-    let conn = Connection::open(unsafe { &AUDIT_DB_PATH })?;
+    unsafe { AUDIT_DB_PATH = p.clone(); AUDIT_DB_PATH_PUB = p.clone(); }
+    let path = unsafe { AUDIT_DB_PATH.clone() };
+    let conn = Connection::open(&path)?;
     conn.execute_batch("
         CREATE TABLE IF NOT EXISTS audit_log (
             id TEXT PRIMARY KEY,
@@ -40,7 +39,8 @@ pub fn init_audit_db(app_dir: &str) -> SqlResult<()> {
 }
 
 fn get_db() -> SqlResult<Connection> {
-    Connection::open(unsafe { &AUDIT_DB_PATH })
+    let path = unsafe { AUDIT_DB_PATH.clone() };
+    Connection::open(&path)
 }
 
 #[tauri::command]

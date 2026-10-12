@@ -5,13 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use rusb::UsbContext; // pour Context::devices()
 
-pub enum PhoneState {
-    On,
-    Off,     // -> BROM pour MTK (VID 0e8d), EDL 9008 pour Qualcomm (VID 05c6)
-    Locked,  // -> Nécessite autorisation + méthode légale (pas de bruteforce)
-    BrokenScreen, // -> OTG + ADB + Screen Mirroring
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct UsbDevice {
     pub vid: String,
@@ -28,7 +21,7 @@ pub fn list_usb_devices() -> Result<Vec<UsbDevice>, String> {
     let mut devices = Vec::new();
 
     // Tentative via ADB
-    if let Ok(output) = Command::new("adb").args(["devices", "-l"]).output() {
+    if let Ok(output) = Command::new(&super::find_adb()).args(["devices", "-l"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines().skip(1) {
             if line.trim().is_empty() { continue; }
@@ -91,38 +84,6 @@ fn detect_device_type(vid: u16, pid: u16) -> String {
     }
 }
 
-pub fn handle_state(state: PhoneState) -> Result<String, String> {
-    match state {
-        PhoneState::On => {
-            // ADB logical + Agent APK
-            adb_logical_extraction()
-        }
-        PhoneState::Off => {
-            // Si VID 0e8d -> MTKClient handshake BROM
-            // Si VID 05c6 -> QFIL EDL handshake - lecture UFS
-            Err("Mode BROM/EDL: Nécessite câble EDL / test point - matériel forensic certifié".into())
-        }
-        PhoneState::Locked => {
-            // INVESTIGATEUR: Ne pas bruteforcer sans cadre légal
-            Err("VERROU ACTIF: Demande code au propriétaire ou mandat judiciaire requis. FIDO-LABS ne contourne pas les verroux sans autorisation.".into())
-        }
-        PhoneState::BrokenScreen => {
-            // Si ADB déjà autorisé -> scrcpy mirror + extraction
-            adb_logical_extraction()
-        }
-    }
-}
-
-fn adb_logical_extraction() -> Result<String, String> {
-    // Vérifie qu'ADB est disponible
-    Command::new("adb")
-        .args(["shell", "echo", "ok"])
-        .output()
-        .map(|_| "ADB connecté - prêt pour extraction logique".into())
-        .map_err(|_| "ADB non trouvé - installez Android Platform Tools".into())
-}
-
-/// Helper interne appelé par `mobile::get_device_info` (la commande Tauri est dans mod.rs)
 pub fn get_device_info(serial: String) -> Result<serde_json::Value, String> {
     let props = vec![
         ("ro.product.brand", "brand"),
@@ -138,7 +99,7 @@ pub fn get_device_info(serial: String) -> Result<serde_json::Value, String> {
     let mut info = serde_json::json!({});
 
     for (prop, key) in props {
-        let output = Command::new("adb")
+        let output = Command::new(&super::find_adb())
             .args(["-s", &serial, "shell", "getprop", prop])
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -147,7 +108,7 @@ pub fn get_device_info(serial: String) -> Result<serde_json::Value, String> {
     }
 
     // Stockage
-    if let Ok(output) = Command::new("adb").args(["-s", &serial, "shell", "df", "/data"]).output() {
+    if let Ok(output) = Command::new(&super::find_adb()).args(["-s", &serial, "shell", "df", "/data"]).output() {
         info["storage"] = serde_json::Value::String(
             String::from_utf8_lossy(&output.stdout).trim().to_string()
         );

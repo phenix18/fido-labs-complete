@@ -1,5 +1,4 @@
-; FIDO-LABS v3.0 - Installeur Windows Inno Setup
-; Compilé avec Inno Setup 6.x ou Inno Setup Compiler (iscc.exe)
+; FIDO-LABS v3.0 - Installeur Windows Inno Setup 7
 
 [Setup]
 AppName=FIDO-LABS v3
@@ -12,15 +11,34 @@ DefaultDirName={autopf}\FIDO-LABS
 DefaultGroupName=FIDO-LABS v3
 AllowNoIcons=yes
 DisableProgramGroupPage=yes
-LicenseFile=..\LICENSE.txt
 OutputDir=..\dist
 OutputBaseFilename=FIDO-LABS-Setup-v3.0.0
 Compression=lzma
 SolidCompression=yes
-SetupIconFile=..\src-tauri\icons\icon.ico
+SetupIconFile=..\fido-labs-complete\src-tauri\icons\icon.ico
 UninstallDisplayIcon={app}\fido-labs.exe
 UninstallDisplayName=FIDO-LABS v3.0
 SetupLogging=yes
+ArchitecturesInstallIn64BitMode=x64
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
+WizardStyle=modern
+WizardSizePercent=100
+MinVersion=10.0.17763
+CloseApplications=yes
+CloseApplicationsFilter=*.exe,*.dll
+AppCopyright=FIDO-LABS 2026
+VersionInfoVersion=3.0.0
+VersionInfoCompany=FIDO-LABS
+VersionInfoDescription=FIDO-LABS Forensic Tool
+VersionInfoCopyright=FIDO-LABS 2026
+Uninstallable=yes
+DirExistsWarning=no
+AppendDefaultDirName=no
+AlwaysShowDirOnReadyPage=yes
+AlwaysShowComponentsList=yes
+ShowComponentSizes=yes
+FlatComponentsList=yes
 
 [Languages]
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
@@ -36,9 +54,9 @@ Name: "{app}\Exports"
 Name: "{app}\Logs"
 
 [Files]
-Source: "..\target\release\fido-labs.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\index.html"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\fido-labs-complete\src-tauri\target\release\fido-labs.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\fido-labs-complete\src-tauri\target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\fido-labs-complete\ui\index.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -48,11 +66,7 @@ Name: "{group}\Désinstaller FIDO-LABS v3"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\FIDO-LABS v3"; Filename: "{app}\fido-labs.exe"; Tasks: desktopicon; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\fido-labs.exe"; Description: "Lancer FIDO-LABS maintenant"; Flags: nowait postinstall skipifsuspen
-
-[UninstallDelete]
-Type: files; Name: "{app}\Logs\*.*"
-Type: filesandallsubdirs; Name: "{app}\Cases\*.*"
+Filename: "{app}\fido-labs.exe"; Description: "Lancer FIDO-LABS maintenant"; Flags: nowait postinstall
 
 [Registry]
 Root: HKCU; Subkey: "Software\FIDO-LABS"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Tasks: autostart
@@ -61,10 +75,9 @@ Root: HKCU; Subkey: "Software\FIDO-LABS"; ValueType: string; ValueName: "Version
 [Code]
 procedure InitializeWizard();
 begin
-  // Page de bienvenue personnalisée avec information éthique
   MsgBox('FIDO-LABS v3.0 - Outil forensique numérique' + #13#10 +
          '' + #13#10 +
-         '⚠️ AVERTISSEMENT ÉTHIQUE :' + #13#10 +
+         'AVERTISSEMENT ETHIQUE :' + #13#10 +
          'Cet outil ne doit être utilisé que par des investigateurs numériques' + #13#10 +
          'en possession d''une autorisation judiciaire valide.' + #13#10 +
          'Toute utilisation non autorisée est illégale.',
@@ -75,9 +88,7 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
   if CurPageID = wpReady then begin
-    // Afficher le chemin d'installation choisi
     Log('FIDO-LABS Installation: ' + ExpandConstant('{app}'));
-    Log('Architecture: ' + GetArchitectureName);
   end;
 end;
 

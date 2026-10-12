@@ -3,8 +3,37 @@ pub mod android;
 pub mod ios;
 pub mod ios_crypto;
 pub mod advanced;
+pub mod chipsets;
+pub mod ios_profiles;
+pub mod locked_extraction;
+pub mod symbian;
+pub mod sim;
+pub mod call_history;
+pub mod contacts;
 
 use serde::{Deserialize, Serialize};
+use std::process::Command;
+use std::path::PathBuf;
+
+/// Recherche adb dans le PATH et les emplacements standards.
+/// Retourne le chemin complet ou "adb" si non trouvé (pour erreur ultérieure).
+pub fn find_adb() -> String {
+    if Command::new("adb").arg("--version").output().is_ok() {
+        return "adb".into();
+    }
+    let candidates = [
+        "C:/Program Files (x86)/Android/android-sdk/platform-tools/adb.exe",
+        "C:/Program Files/Android/android-sdk/platform-tools/adb.exe",
+        "platform-tools/adb.exe",
+        "tools/platform-tools/adb.exe",
+    ];
+    for c in &candidates {
+        if PathBuf::from(c).exists() {
+            return c.to_string();
+        }
+    }
+    "adb".into()
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DeviceProfile {
@@ -25,7 +54,7 @@ pub fn detect_device() -> Result<DeviceProfile, String> {
     use std::process::Command;
 
     // Essai ADB en premier
-    if let Ok(out) = Command::new("adb").args(["devices"]).output() {
+    if let Ok(out) = Command::new(&find_adb()).args(["devices"]).output() {
         let txt = String::from_utf8_lossy(&out.stdout);
         let lines: Vec<&str> = txt.lines()
             .skip(1)
@@ -65,8 +94,7 @@ pub fn detect_device() -> Result<DeviceProfile, String> {
 }
 
 fn adb_getprop(serial: &str, prop: &str) -> String {
-    use std::process::Command;
-    Command::new("adb")
+    Command::new(&find_adb())
         .args(["-s", serial, "shell", "getprop", prop])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -114,7 +142,7 @@ fn count_rows(kind: &str, text: &str) -> i64 {
 
 /// Exécute `adb -s SERIAL <args>` et renvoie la sortie brute, ou l'erreur adb.
 fn adb_dump(serial: &str, args: &[&str]) -> Result<Vec<u8>, String> {
-    let out = std::process::Command::new("adb")
+    let out = Command::new(&find_adb())
         .arg("-s").arg(serial)
         .args(args)
         .output()
@@ -281,7 +309,7 @@ pub fn extract_logical(case_id: String, serial: String, output_dir: String) -> R
     use sha2::{Sha256, Digest};
 
     // 1. Vérifier la connexion ADB
-    let check = std::process::Command::new("adb")
+    let check = Command::new(&find_adb())
         .args(["-s", &serial, "shell", "echo", "ok"])
         .output()
         .map_err(|_| "ADB non disponible — installez Android Platform Tools (adb) et activez le débogage USB".to_string())?;
@@ -410,7 +438,7 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
     use sha2::{Sha256, Digest};
     use std::io::Read;
 
-    let check = std::process::Command::new("adb")
+    let check = Command::new(&find_adb())
         .args(["-s", &serial, "shell", "echo", "ok"]).output()
         .map_err(|_| "ADB non disponible — installez Android Platform Tools".to_string())?;
     if !check.status.success() {
@@ -438,13 +466,13 @@ pub fn pull_media(case_id: String, serial: String, output_dir: String) -> Result
 
     let mut pulled_dirs = Vec::new();
     for d in dirs {
-        let exists = std::process::Command::new("adb")
+        let exists = Command::new(&find_adb())
             .args(["-s", &serial, "shell", "test", "-d", d, "&&", "echo", "Y"])
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).contains('Y'))
             .unwrap_or(false);
         if !exists { continue; }
-        let _ = std::process::Command::new("adb")
+        let _ = Command::new(&find_adb())
             .args(["-s", &serial, "pull", "-a", d, &base]).output();
         pulled_dirs.push(d.to_string());
     }

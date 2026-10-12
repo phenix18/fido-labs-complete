@@ -2,7 +2,6 @@
 use std::fs::{File, create_dir_all};
 use std::io::{Read, Write, Seek, SeekFrom};
 use sha2::{Sha256, Digest};
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
 
 use crate::extractors::sdcard::Partition;

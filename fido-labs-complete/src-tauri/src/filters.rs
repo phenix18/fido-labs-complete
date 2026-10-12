@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::sync::Mutex;
+use sha2::{Sha256, Digest};
+use hex;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AdvancedFilter {
@@ -117,6 +119,28 @@ pub fn save_filter_as_template(filter_id: String, name: String) -> Result<String
         .ok_or_else(|| "Filtre non trouvé".to_string())?;
     f.name = name;
     Ok("Template sauvegardé".into())
+}
+
+/// Supprime toutes les données de démonstration.
+#[tauri::command]
+pub fn clear_demo_data() {
+    let mut db = FILTERED_ITEMS.lock().unwrap();
+    db.clear();
+    let mut fb = FILTERS.lock().unwrap();
+    fb.clear();
+}
+
+/// Sauvegarde les données d'extraction dans un fichier JSON local avec chaîne de garde.
+#[tauri::command]
+pub fn save_extracted_to_file(data: String, output_path: String) -> Result<String, String> {
+    let json = data;
+    std::fs::create_dir_all(std::path::Path::new(&output_path).parent().unwrap())
+        .map_err(|e| format!("Création dossier : {}", e))?;
+    std::fs::write(&output_path, &json).map_err(|e| format!("Écriture : {}", e))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&json);
+    let sha = hex::encode(hasher.finalize());
+    Ok(format!("Fichier sauvegardé : {} (SHA256: {})", output_path, sha))
 }
 
 /// Seed items de démonstration

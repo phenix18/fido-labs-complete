@@ -1,6 +1,6 @@
 // EVENT CALENDAR MODULE - Calendrier des événements forensiques
 use serde::{Deserialize, Serialize};
-use chrono::Utc;
+
 use uuid::Uuid;
 use std::sync::Mutex;
 

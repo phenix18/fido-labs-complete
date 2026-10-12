@@ -1,4 +1,5 @@
 // REPORTS MODULE - Rapports généraux et spécifiques par utilisateur
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use chrono::Utc;
 use uuid::Uuid;

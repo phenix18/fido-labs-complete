@@ -1,7 +1,10 @@
 // CASE MANAGER - Gestion des dossiers d'enquête
+#![allow(static_mut_refs)]
 use rusqlite::{Connection, Result as SqlResult};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
+use hex;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -19,7 +22,8 @@ static mut CASES_DB_PATH: String = String::new();
 
 pub fn init_cases_db(app_dir: &str) -> SqlResult<()> {
     unsafe { CASES_DB_PATH = format!("{}/cases.db", app_dir); }
-    let conn = Connection::open(unsafe { &CASES_DB_PATH })?;
+    let path = unsafe { CASES_DB_PATH.clone() };
+    let conn = Connection::open(&path)?;
     conn.execute_batch("
         CREATE TABLE IF NOT EXISTS cases (
             id TEXT PRIMARY KEY,
@@ -35,7 +39,8 @@ pub fn init_cases_db(app_dir: &str) -> SqlResult<()> {
 }
 
 fn get_db() -> SqlResult<Connection> {
-    Connection::open(unsafe { &CASES_DB_PATH })
+    let path = unsafe { CASES_DB_PATH.clone() };
+    Connection::open(&path)
 }
 
 #[tauri::command]
@@ -114,7 +119,8 @@ pub fn export_chain_of_custody(case_id: String, output_path: String) -> Result<S
         })
     ).map_err(|e| e.to_string())?;
 
-    let audit_conn = Connection::open(unsafe { &crate::audit::AUDIT_DB_PATH_PUB })
+    let audit_path = unsafe { crate::audit::AUDIT_DB_PATH_PUB.clone() };
+    let audit_conn = Connection::open(&audit_path)
         .unwrap_or_else(|_| Connection::open(":memory:").unwrap());
 
     let mut audit_entries = Vec::new();
@@ -155,4 +161,28 @@ pub fn export_chain_of_custody(case_id: String, output_path: String) -> Result<S
 
     std::fs::write(&output_path, &report).map_err(|e| e.to_string())?;
     Ok(format!("Rapport exporté vers {}", output_path))
+}
+
+/// Sauvegarde des données extraites dans un fichier sécurisé avec chaîne de garde SHA256.
+#[tauri::command]
+pub fn save_extracted_data(data: String, output_path: String, case_id: String) -> Result<String, String> {
+    let json = data;
+    std::fs::create_dir_all(std::path::Path::new(&output_path).parent().unwrap())
+        .map_err(|e| format!("Création dossier : {}", e))?;
+    std::fs::write(&output_path, &json).map_err(|e| format!("Écriture : {}", e))?;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&json);
+    let sha = hex::encode(hasher.finalize());
+    let manifest = serde_json::json!({
+        "tool": "FIDO-LABS v3",
+        "case_id": case_id,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "file": output_path,
+        "sha256": sha,
+        "size": json.len(),
+    });
+    let manifest_path = format!("{}.manifest.json", output_path);
+    std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).unwrap_or_default())
+        .map_err(|e| format!("Manifeste : {}", e))?;
+    Ok(format!("Sauvegarde créée : {} (SHA256: {})", output_path, sha))
 }

@@ -1,8 +1,8 @@
 // LICENCE MANAGER - Standard / Pro / Site avec durée et modules
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc, Duration};
 use sha2::{Sha256, Digest};
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum LicenseTier {

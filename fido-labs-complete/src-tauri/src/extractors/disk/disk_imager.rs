@@ -1,9 +1,8 @@
 // DISK IMAGER v2 - Image E01/DD avec SHA256 chain of custody
 use std::fs::{File, create_dir_all};
-use std::io::{Read, Write, Seek, SeekFrom};
+use std::io::{Read, Write};
 use sha2::{Sha256, Digest};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 
 use crate::extractors::disk::DiskInfo;
 
@@ -144,7 +143,7 @@ pub fn create_forensic_image(source: &str, dest: &str, format: &str, case_id: &s
     Ok(format!("Image créée: {} | {:.2}GB | SHA256: {}...", dest_path, written as f64/1e9, &hash_src[..16]))
 }
 
-fn write_ewf_header(dst: &mut File, source: &str, case_id: &str, _size: u64) -> Result<(), String> {
+fn write_ewf_header(dst: &mut File, _source: &str, case_id: &str, _size: u64) -> Result<(), String> {
     // En-tête EWF simplifié (signature + métadonnées case)
     let sig = b"EVF\x09\x0D\x0A\xFF\x00"; // EVF signature
     dst.write_all(sig).map_err(|e| e.to_string())?;

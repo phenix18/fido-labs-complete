@@ -1,4 +1,5 @@
 // SETTINGS MODULE - Réglages application, affichage, modules, exports, sessions
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -485,7 +486,7 @@ fn export_docx(data: &serde_json::Value, opts: &ExportOptions, path: &str) -> Re
     Ok(format!("Exporté: {}", path))
 }
 
-fn export_csv(data: &serde_json::Value, path: &str) -> Result<String, String> {
+fn export_csv(_data: &serde_json::Value, path: &str) -> Result<String, String> {
     // Simple CSV - en prod, utiliser csv crate
     let content = "id,name,value\n1,Item 1,100\n2,Item 2,200\n";
     fs::write(path, content).map_err(|e| e.to_string())?;
@@ -510,7 +511,7 @@ fn export_txt(data: &serde_json::Value, path: &str) -> Result<String, String> {
     Ok(format!("Exporté: {}", path))
 }
 
-fn export_xlsx(data: &serde_json::Value, path: &str) -> Result<String, String> {
+fn export_xlsx(_data: &serde_json::Value, path: &str) -> Result<String, String> {
     // Simulation - en prod, utiliser calamine ou xlsx writer
     fs::write(path, "XLSX format - placeholder").map_err(|e| e.to_string())?;
     Ok(format!("Exporté: {}", path))

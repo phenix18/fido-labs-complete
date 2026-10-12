@@ -1,7 +1,7 @@
 // WHATSAPP DECODER v2 - msgstore.db + WAL + freelist pour supprimés + déchiffrement .crypt14/15
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{TimeZone, Utc};
 use hmac::{Hmac, Mac};
 use sha2::{Sha256, Digest};
 use aes_gcm::aead::{Aead, KeyInit, generic_array::GenericArray};
@@ -115,8 +115,33 @@ pub struct WaMessage {
     pub to_jid: String,
     pub body: String,
     pub media_type: i32, // 0=texte, 1=image, 2=video, 3=audio, etc.
+    pub media_label: String, // libellé lisible du type de média
     pub deleted: bool,
     pub chat_name: String,
+}
+
+/// Libellé lisible du type de média WhatsApp (0=texte, 1=image, 2=vidéo, 3=audio,
+/// 4=contact, 5=localisation, 6=url, 7=document, 8=sticker, 9=appel, 13=gif…).
+fn wa_media_label(t: i32) -> String {
+    match t {
+        0 => "Texte",
+        1 => "Image",
+        2 => "Vidéo",
+        3 => "Audio",
+        4 => "Contact",
+        5 => "Localisation",
+        6 => "Lien (URL)",
+        7 => "Document",
+        8 => "Sticker / GIF",
+        9 => "Appel",
+        10 => "Système",
+        13 => "GIF animé",
+        15 => "Réaction",
+        16 => "Lien de groupe",
+        20 => "Événement",
+        21 => "Invitation",
+        _ => "Autre",
+    }.to_string()
 }
 
 #[tauri::command]
@@ -162,6 +187,7 @@ pub fn parse_whatsapp_db(db_path: String, include_deleted: bool) -> Result<Vec<W
                 to_jid:   if from_me == 1 { jid } else { "moi".into() },
                 body: row.get(4)?,
                 media_type: row.get(5)?,
+                media_label: wa_media_label(row.get::<_, i32>(5).unwrap_or(0)),
                 deleted: false,
                 chat_name: row.get(6)?,
             })
@@ -189,6 +215,7 @@ pub fn parse_whatsapp_db(db_path: String, include_deleted: bool) -> Result<Vec<W
                     to_jid:   if from_me == 1 { jid } else { "moi".into() },
                     body: "[MESSAGE SUPPRIMÉ]".into(),
                     media_type: row.get(5)?,
+                    media_label: wa_media_label(row.get::<_, i32>(5).unwrap_or(0)),
                     deleted: true,
                     chat_name: "?".into(),
                 })
@@ -199,6 +226,169 @@ pub fn parse_whatsapp_db(db_path: String, include_deleted: bool) -> Result<Vec<W
     }
 
     Ok(messages)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WaContact {
+    pub jid: String,
+    pub display_name: String,
+    pub number: String,
+    pub wa_verified: bool,
+    pub status: String,
+}
+
+/// Décode la base de contacts WhatsApp `wa.db` (jadis `wa.db` / `wa7.db`).
+/// Contient la correspondance JID → numéro + nom d'affichage + statut vérifié.
+#[tauri::command]
+pub fn parse_wa_contacts(db_path: String) -> Result<Vec<WaContact>, String> {
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI;
+    let conn = Connection::open_with_flags(&db_path, flags)
+        .map_err(|e| format!("Impossible d'ouvrir wa.db: {}", e))?;
+    let _ = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);");
+
+    let mut contacts = Vec::new();
+    // Schéma WhatsApp : table wa_contacts (jid, display_name, status) + wa_contact
+    // (wa_contact_id, number). On fait une jointure best-effort selon les colonnes présentes.
+    let has_wa_contact = {
+        let mut ok = false;
+        if let Ok(mut stmt) = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wa_contact'") {
+            if let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(0)) {
+                ok = rows.flatten().next().is_some();
+            }
+        }
+        ok
+    };
+
+    if has_wa_contact {
+        let q = "SELECT c.jid, COALESCE(c.display_name,''), COALESCE(c.number,''), \
+                 COALESCE(c.wa_verified,0), COALESCE(c.status,'') FROM wa_contact c LIMIT 50000";
+        if let Ok(mut stmt) = conn.prepare(q) {
+            if let Ok(rows) = stmt.query_map([], |r| {
+                Ok(WaContact {
+                    jid: r.get(0).unwrap_or_default(),
+                    display_name: r.get(1).unwrap_or_default(),
+                    number: r.get(2).unwrap_or_default(),
+                    wa_verified: r.get::<_, i64>(3).unwrap_or(0) != 0,
+                    status: r.get(4).unwrap_or_default(),
+                })
+            }) {
+                for c in rows.flatten() { contacts.push(c); }
+            }
+        }
+    } else {
+        // Schéma alternatif : wa_contacts (jid, display_name, status) sans numéro.
+        let q = "SELECT jid, COALESCE(display_name,''), COALESCE(status,'') FROM wa_contacts LIMIT 50000";
+        if let Ok(mut stmt) = conn.prepare(q) {
+            if let Ok(rows) = stmt.query_map([], |r| {
+                Ok(WaContact {
+                    jid: r.get(0).unwrap_or_default(),
+                    display_name: r.get(1).unwrap_or_default(),
+                    number: String::new(),
+                    wa_verified: false,
+                    status: r.get(2).unwrap_or_default(),
+                })
+            }) {
+                for c in rows.flatten() { contacts.push(c); }
+            }
+        }
+    }
+    Ok(contacts)
+}
+
+/// Cherche récursivement les fichiers WhatsApp dans un dossier d'extraction téléphone
+/// (ou un dossier Android/data copié). Renvoie les chemins des bases + fichiers .crypt.
+#[tauri::command]
+pub fn scan_whatsapp_folder(folder: String) -> Result<serde_json::Value, String> {
+    let root = std::path::PathBuf::from(&folder);
+    if !root.exists() {
+        return Err(format!("Dossier introuvable : {}", folder));
+    }
+    let mut msgstore = Vec::new();
+    let mut wa_db = Vec::new();
+    let mut crypt = Vec::new();
+
+    for entry in walkdir::WalkDir::new(&root).into_iter().flatten() {
+        if !entry.file_type().is_file() { continue; }
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        let path = entry.path().to_string_lossy().to_string();
+        if name.starts_with("msgstore") && name.ends_with(".db") && !name.ends_with(".db-wal") {
+            msgstore.push(path);
+        } else if name == "wa.db" || name == "wa7.db" {
+            wa_db.push(path);
+        } else if name.starts_with("msgstore") && (name.ends_with(".crypt14") || name.ends_with(".crypt15")) {
+            crypt.push(path);
+        }
+    }
+
+    Ok(serde_json::json!({
+        "folder": folder,
+        "msgstore_db": msgstore,
+        "wa_db": wa_db,
+        "crypt_files": crypt,
+        "found": !(msgstore.is_empty() && wa_db.is_empty() && crypt.is_empty()),
+    }))
+}
+
+/// Analyse complète d'un dossier WhatsApp : trouve msgstore.db + wa.db, décode les
+/// messages (avec contacts joints) et renvoie un résumé. `include_deleted` active la
+/// lecture des messages effacés depuis la freelist/WAL.
+#[tauri::command]
+pub fn analyze_whatsapp_folder(folder: String, include_deleted: bool) -> Result<serde_json::Value, String> {
+    let scan = scan_whatsapp_folder(folder.clone())?;
+    let msgstore = scan["msgstore_db"].as_array().cloned().unwrap_or_default();
+    let wa_dbs = scan["wa_db"].as_array().cloned().unwrap_or_default();
+    let crypt = scan["crypt_files"].as_array().cloned().unwrap_or_default();
+
+    if msgstore.is_empty() {
+        // Aucune base en clair : signaler les .crypt présents (nécessitent la clé).
+        if crypt.is_empty() {
+            return Ok(serde_json::json!({
+                "success": false,
+                "summary": "Aucune base WhatsApp (msgstore.db) trouvée dans le dossier. Si un fichier .crypt14/.crypt15 est présent, utilisez « Déchiffrer » avec la clé.",
+                "crypt_files": crypt,
+            }));
+        }
+        return Ok(serde_json::json!({
+            "success": false,
+            "summary": format!("{} fichier(s) WhatsApp CHIFFRÉ(s) (.crypt14/.crypt15) trouvé(s) — fournissez la clé (fichier clé WhatsApp, 32 octets hex) pour déchiffrer.", crypt.len()),
+            "crypt_files": crypt,
+        }));
+    }
+
+    // Décoder les messages depuis la première msgstore.db trouvée.
+    let db_path = msgstore[0].as_str().unwrap_or("").to_string();
+    let messages = parse_whatsapp_db(db_path.clone(), include_deleted)?;
+
+    // Décoder les contacts WhatsApp (wa.db) si présent, pour joindre les noms.
+    let contacts: Vec<WaContact> = if let Some(wadb) = wa_dbs.first() {
+        let p = wadb.as_str().unwrap_or("");
+        if !p.is_empty() { parse_wa_contacts(p.to_string()).unwrap_or_default() } else { Vec::new() }
+    } else { Vec::new() };
+
+    // Agrégats utiles (pour l'analyse Money Flow / Timeline).
+    let mut by_media: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut by_chat: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for m in &messages {
+        *by_media.entry(m.media_label.clone()).or_insert(0) += 1;
+        *by_chat.entry(m.chat_name.clone()).or_insert(0) += 1;
+    }
+    // Trier les chats par volume (top discussions).
+    let mut chats: Vec<(String, usize)> = by_chat.into_iter().collect();
+    chats.sort_by(|a, b| b.1.cmp(&a.1));
+
+    Ok(serde_json::json!({
+        "success": true,
+        "folder": folder,
+        "db_path": db_path,
+        "wa_db_path": wa_dbs.first().and_then(|v| v.as_str()).unwrap_or(""),
+        "total_messages": messages.len(),
+        "contacts_count": contacts.len(),
+        "by_media": by_media,
+        "top_chats": chats.iter().take(20).map(|(c, n)| serde_json::json!({"chat": c, "messages": n})).collect::<Vec<_>>(),
+        "deleted_included": include_deleted,
+        "messages": messages.iter().take(2000).cloned().collect::<Vec<_>>(),
+        "contacts": contacts.iter().take(2000).cloned().collect::<Vec<_>>(),
+    }))
 }
 
 #[cfg(test)]
@@ -232,5 +422,56 @@ mod crypt_tests {
         assert!(out.starts_with(b"SQLite format 3"), "doit ressortir une base SQLite");
         // Mauvaise clé → échec (aucun faux positif grâce à l'auth GCM)
         assert!(decrypt_wa_bytes(&file, &[1u8; 32], true).is_err());
+    }
+
+    #[test]
+    fn libelle_type_media() {
+        assert_eq!(wa_media_label(0), "Texte");
+        assert_eq!(wa_media_label(1), "Image");
+        assert_eq!(wa_media_label(2), "Vidéo");
+        assert_eq!(wa_media_label(7), "Document");
+        assert_eq!(wa_media_label(13), "GIF animé");
+        assert_eq!(wa_media_label(999), "Autre");
+    }
+
+    #[test]
+    fn scanne_dossier_whatsapp() {
+        // Construit un mini dossier d'extraction avec msgstore.db + wa.db.
+        let root = std::env::temp_dir().join(format!("fido_wa_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("apps/com.whatsapp/databases")).unwrap();
+
+        let msg_path = root.join("apps/com.whatsapp/databases/msgstore.db");
+        let wa_path = root.join("apps/com.whatsapp/databases/wa.db");
+        {
+            let c = rusqlite::Connection::open(&msg_path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE messages(key_id INTEGER PRIMARY KEY, timestamp INTEGER, key_remote_jid TEXT, key_from_me INTEGER, data TEXT, media_wa_type INTEGER);
+                 CREATE TABLE chat_list(key_remote_jid TEXT PRIMARY KEY, subject TEXT);
+                 INSERT INTO messages VALUES (1, 1710490991000, '22670123456@s.whatsapp.net', 0, 'Rendez-vous à 20h', 0);
+                 INSERT INTO chat_list VALUES ('22670123456@s.whatsapp.net', 'Awa');"
+            ).unwrap();
+        }
+        {
+            let c = rusqlite::Connection::open(&wa_path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE wa_contact(jid TEXT PRIMARY KEY, display_name TEXT, number TEXT, wa_verified INTEGER, status TEXT);
+                 INSERT INTO wa_contact VALUES ('22670123456@s.whatsapp.net', 'Awa Traoré', '22670123456', 1, 'Dispo');"
+            ).unwrap();
+        }
+
+        let scan = scan_whatsapp_folder(root.to_string_lossy().to_string()).expect("scan");
+        assert_eq!(scan["msgstore_db"].as_array().unwrap().len(), 1);
+        assert_eq!(scan["wa_db"].as_array().unwrap().len(), 1);
+        assert_eq!(scan["found"], true);
+
+        let res = analyze_whatsapp_folder(root.to_string_lossy().to_string(), false).expect("analyse");
+        assert_eq!(res["total_messages"], 1);
+        assert_eq!(res["contacts_count"], 1);
+        assert_eq!(res["messages"][0]["body"].as_str().unwrap(), "Rendez-vous à 20h");
+        assert_eq!(res["messages"][0]["media_label"].as_str().unwrap(), "Texte");
+        assert_eq!(res["contacts"][0]["display_name"].as_str().unwrap(), "Awa Traoré");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

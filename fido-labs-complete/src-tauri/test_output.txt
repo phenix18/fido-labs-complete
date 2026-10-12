@@ -1,0 +1,41 @@
+
+running 36 tests
+test decoders::whatsapp::crypt_tests::libelle_type_media ... ok
+test analyzer::timeline::tests::fusionne_et_trie_les_sources ... ok
+test extractors::mobile::chipsets::tests::detecte_mediatek_dimensity ... ok
+test decoders::sqlite_recover::tests::rejette_fichier_non_sqlite ... ok
+test extractors::mobile::chipsets::tests::detecte_par_vidpid_mode_special ... ok
+test extractors::mobile::chipsets::tests::detecte_tensor_google ... ok
+test extractors::mobile::chipsets::tests::detecte_qualcomm_snapdragon ... ok
+test decoders::android_backup::tests::signale_sauvegarde_chiffree_sans_contournement ... ok
+test extractors::mobile::ios_profiles::tests::case_insensible ... ok
+test decoders::whatsapp::crypt_tests::dechiffre_crypt15_round_trip ... ok
+test extractors::mobile::ios_profiles::tests::identifie_ipad ... ok
+test extractors::mobile::ios_crypto::tests::aes_key_unwrap_vecteur_nist ... ok
+test extractors::mobile::ios_profiles::tests::identifie_iphone_5s_checkm8 ... ok
+test extractors::mobile::ios_profiles::tests::identifie_iphone_13 ... ok
+test extractors::mobile::ios_profiles::tests::inconnu_retourne_generique ... ok
+test extractors::mobile::locked_extraction::tests::plan_ios_checkm8_prioritaire ... ok
+test extractors::mobile::locked_extraction::tests::plan_mtk_inclut_brom_et_sim_sd ... ok
+test extractors::mobile::locked_extraction::tests::plan_qualcomm_inclut_edl ... ok
+test extractors::mobile::locked_extraction::tests::platform_classification ... ok
+test extractors::mobile::tests::calls_parsing_reel ... ok
+test extractors::mobile::symbian::tests::test_extract_xml_tag ... ok
+test extractors::mobile::symbian::tests::test_parse_nokia_sms ... ok
+test extractors::mobile::symbian::tests::test_parse_vcf ... ok
+test extractors::mobile::tests::contacts_parsing_reel ... ok
+test extractors::mobile::tests::ignore_lignes_non_row ... ok
+test extractors::mobile::tests::sms_parsing_reel ... ok
+test decoders::android_backup::tests::deballe_une_sauvegarde_ab ... ok
+test extractors::mobile::locked_extraction::tests::image_un_support_amovible ... ok
+test report_pdf::tests::pdf_inclut_medias_et_dumps_physiques ... ok
+test report_pdf::tests::genere_un_pdf_valide ... ok
+test decoders::sqlite_recover::tests::recupere_lignes_effacees_reelles ... ok
+test decoders::android_backup::tests::decode_whatsapp_et_sms ... ok
+test decoders::whatsapp::crypt_tests::scanne_dossier_whatsapp ... ok
+test decoders::orange_money::tests::detecte_les_transactions_par_mots_cles ... ok
+test extractors::mobile::ios::tests::analyse_une_sauvegarde_ios_minimale ... ok
+test decoders::android_backup::tests::dechiffre_un_ab_protege_par_mot_de_passe ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
