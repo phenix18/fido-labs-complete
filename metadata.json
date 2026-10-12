@@ -1,0 +1,8 @@
+{
+  "name": "FIDO-LABS v3",
+  "description": "FIDO-LABS v3 — Forensic Integrated Data Operator. Plateforme forensique complète : extraction mobile (ADB/BROM/EDL), cartes SD, disques, WhatsApp, Mobile Money, inspecteur hexadécimal, forensique web, EXIF & GPS, contrôle d'intégrité IOC/NSRL, règles YARA et procès-verbal judiciaire ISO 27037.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

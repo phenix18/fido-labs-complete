@@ -1,8 +1,16 @@
 <!DOCTYPE html>
+<html lang="fr">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FIDO-LABS v3</title>
+<meta name="description" content="FIDO-LABS v3 — Forensic Integrated Data Operator. Plateforme forensique complète : extraction mobile (ADB/BROM/EDL), cartes SD, disques, WhatsApp, Mobile Money, inspecteur hexadécimal, forensique web, EXIF & GPS, contrôle d'intégrité IOC/NSRL, règles YARA et procès-verbal judiciaire ISO 27037.">
+<meta property="og:title" content="FIDO-LABS v3">
+<meta property="og:description" content="FIDO-LABS v3 — Forensic Integrated Data Operator. Plateforme forensique complète : extraction mobile (ADB/BROM/EDL), cartes SD, disques, WhatsApp, Mobile Money, inspecteur hexadécimal, forensique web, EXIF & GPS, contrôle d'intégrité IOC/NSRL, règles YARA et procès-verbal judiciaire ISO 27037.">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+</head>
+<body>
 <style>
 :root{--bg:#0a0c12;--surface:#131720;--surface2:#1a2030;--border:#252d3d;--border2:#2e3850;--accent:#00e5c3;--accent2:#00b89d;--blue:#4d9fff;--warn:#f5a623;--danger:#ef4444;--success:#22c55e;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#8892a4;--faint:#3d4a60;--mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;--sw:56px;--sew:230px;--th:48px;--th2:200px}
 @media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f0f2f6;--surface:#fff;--surface2:#f5f7fb;--border:#dde1ea;--border2:#c8cdd8;--text:#1a1f2e;--muted:#5a6478;--faint:#b0b8cc}}
@@ -177,6 +185,24 @@ tbody tr:hover{background:var(--surface2)}
 #loading-percent{font-size:24px;font-weight:700;font-family:var(--mono);color:var(--accent);margin-top:12px}
 #save-btn{display:none;margin-top:20px;padding:10px 24px;background:var(--accent);color:#0a0c12;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-family:var(--sans);font-size:14px}
 #save-btn:hover{opacity:0.9}
+
+/* FORENSIC EXTENSIONS: HEX VIEWER, EXIF, BROWSER, IOC */
+.hex-container{background:#04060a;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:11.5px;padding:12px;overflow-x:auto;user-select:text}
+.hex-table{border-collapse:collapse;width:100%;table-layout:fixed}
+.hex-table td{padding:2px 6px;vertical-align:top;border:none}
+.hex-offset{color:var(--faint);font-weight:600;width:90px;white-space:nowrap}
+.hex-bytes{color:#8fb8ff;letter-spacing:1.5px;word-spacing:3px;white-space:nowrap;width:340px}
+.hex-ascii{color:var(--text);letter-spacing:1px;white-space:nowrap;border-left:1px solid var(--border);padding-left:10px}
+.hex-highlight{background:rgba(0,229,195,0.25);color:var(--accent);font-weight:700;border-radius:2px}
+.entropy-meter{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative}
+.entropy-fill{height:100%;border-radius:4px;transition:width .4s ease}
+.exif-preview-img{width:100%;max-height:280px;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#07090e}
+.pv-sheet{background:#fff;color:#111;padding:36px;border-radius:8px;font-family:system-ui,serif;line-height:1.6;box-shadow:0 8px 30px rgba(0,0,0,0.5);max-width:780px;margin:0 auto}
+.pv-sheet h1{font-size:18px;text-align:center;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:16px}
+.pv-sheet .pv-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;margin-bottom:18px}
+.pv-sheet .pv-box{border:1px solid #ccc;padding:12px;border-radius:4px;background:#f9fafb;font-family:var(--mono);font-size:11.5px;word-break:break-all;margin:12px 0}
+.pv-sheet .pv-stamp{margin-top:28px;display:flex;justify-content:space-between;align-items:flex-end;padding-top:16px;border-top:1px dashed #ccc}
+
 </style>
 
 <div id="app">
@@ -192,6 +218,10 @@ tbody tr:hover{background:var(--surface2)}
     <div class="nav-item" onclick="nav('disk')"><span class="ni">🖴</span><span class="nt">Disque</span></div>
     <div class="nav-label">Analyse</div>
     <div class="nav-item" onclick="nav('whatsapp')"><span class="ni">💬</span><span class="nt">WhatsApp</span></div>
+    <div class="nav-item" onclick="nav('browser')"><span class="ni">🌐</span><span class="nt">Navigateurs</span></div>
+    <div class="nav-item" onclick="nav('exif')"><span class="ni">📸</span><span class="nt">Métadonnées EXIF</span></div>
+    <div class="nav-item" onclick="nav('hexviewer')"><span class="ni">🔬</span><span class="nt">Inspecteur Hex</span></div>
+    <div class="nav-item" onclick="nav('iocheck')"><span class="ni">🛡️</span><span class="nt">Hashs & IOC</span></div>
     <div class="nav-item" onclick="nav('money')"><span class="ni">💸</span><span class="nt">Money Flow</span></div>
     <div class="nav-item" onclick="nav('timeline')"><span class="ni">📅</span><span class="nt">Timeline</span></div>
     <div class="nav-item" onclick="nav('calendar')"><span class="ni">🗓</span><span class="nt">Calendrier</span></div>
@@ -753,7 +783,238 @@ tbody tr:hover{background:var(--surface2)}
       </div>
     </div>
 
-    <!-- FILTRES -->
+    
+    <!-- BROWSER FORENSICS -->
+    <div id="page-browser" class="page">
+      <div class="sct-hdr">
+        <div>
+          <h2>🌐 Forensique Navigateurs & Traces Web</h2>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Historique unifié, recherches moteurs, téléchargements et cookies de session (Chrome, Safari, Firefox, Edge).</div>
+        </div>
+        <div class="spacer"></div>
+        <input type="text" id="browser-search" placeholder="Rechercher URL / mot-clé..." oninput="filterBrowserView()" style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 10px;font-size:11.5px;color:var(--text);width:220px">
+        <select id="browser-filter-app" onchange="loadBrowserForensics()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11.5px">
+          <option value="ALL">Tous les navigateurs</option>
+          <option value="Chrome">Google Chrome</option>
+          <option value="Safari">Apple Safari</option>
+          <option value="Firefox">Mozilla Firefox</option>
+          <option value="Edge">Microsoft Edge</option>
+        </select>
+        <button class="btn btn-accent btn-sm" onclick="loadBrowserForensics()">🔄 Actualiser</button>
+        <button class="btn btn-blue btn-sm" onclick="exportBrowserCSV()">📊 Export CSV</button>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat"><div class="ct">Pages visitées</div><div class="v" id="br-stat-pages">0</div><div class="l">historique répertorié</div></div>
+        <div class="card stat"><div class="ct">Recherches web</div><div class="v" id="br-stat-searches" style="color:var(--blue)">0</div><div class="l">requêtes Google/Bing</div></div>
+        <div class="card stat"><div class="ct">Téléchargements</div><div class="v" id="br-stat-downloads" style="color:var(--orange)">0</div><div class="l">fichiers récupérés</div></div>
+        <div class="card stat"><div class="ct">Sessions & Cookies</div><div class="v" id="br-stat-cookies" style="color:var(--accent)">0</div><div class="l">comptes identifiés</div></div>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="br-tab-hist" class="btn btn-sm btn-accent" onclick="switchBrowserTab('hist')">🌐 Historique des visites</button>
+        <button id="br-tab-search" class="btn btn-sm btn-ghost" onclick="switchBrowserTab('search')">🔎 Mots-clés recherchés</button>
+        <button id="br-tab-down" class="btn btn-sm btn-ghost" onclick="switchBrowserTab('down')">⬇️ Fichiers téléchargés</button>
+        <button id="br-tab-cook" class="btn btn-sm btn-ghost" onclick="switchBrowserTab('cook')">🍪 Cookies & Comptes</button>
+      </div>
+
+      <div id="br-view-hist" class="card">
+        <div class="twrap"><table><thead><tr><th>Date & Heure</th><th>Navigateur</th><th>Titre de la page</th><th>URL visitée</th><th>Visites</th><th>Action</th></tr></thead><tbody id="br-table-hist"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Chargement...</td></tr></tbody></table></div>
+      </div>
+
+      <div id="br-view-search" class="card" style="display:none">
+        <div class="twrap"><table><thead><tr><th>Horodatage</th><th>Moteur</th><th>Requête de recherche</th><th>Catégorie / Pertinence</th><th>Contexte</th></tr></thead><tbody id="br-table-search"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Chargement...</td></tr></tbody></table></div>
+      </div>
+
+      <div id="br-view-down" class="card" style="display:none">
+        <div class="twrap"><table><thead><tr><th>Date</th><th>Fichier</th><th>Taille</th><th>URL Source</th><th>Empreinte SHA-256</th><th>Statut</th></tr></thead><tbody id="br-table-down"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Chargement...</td></tr></tbody></table></div>
+      </div>
+
+      <div id="br-view-cook" class="card" style="display:none">
+        <div class="twrap"><table><thead><tr><th>Domaine</th><th>Nom du jeton</th><th>Valeur / Signature</th><th>Expiration</th><th>Sécurité</th><th>Compte associé</th></tr></thead><tbody id="br-table-cook"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Chargement...</td></tr></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- EXIF FORENSICS -->
+    <div id="page-exif" class="page">
+      <div class="sct-hdr">
+        <div>
+          <h2>📸 Analyseur EXIF & Métadonnées Photographiques</h2>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Extraction d'artefacts photographiques, coordonnées GPS, empreinte du boîtier et détection de retouche/falsification.</div>
+        </div>
+        <div class="spacer"></div>
+        <select id="exif-preset-sel" onchange="loadExifSample()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11.5px">
+          <option value="IMG_20240315_081422.jpg">IMG_081422.jpg — Scène suspecte (GPS Ouagadougou)</option>
+          <option value="PHOTO_EVIDENCE_RETOUCHE.jpg">EVIDENCE_EDITED.jpg — Falsification détectée (Photoshop)</option>
+          <option value="WHATSAPP_MEDIA_STRIPPED.jpg">WA_RECEIVED.jpg — Média WhatsApp (Métadonnées nettoyées)</option>
+          <option value="IPHONE_14PRO_NIGHT.heic">IPHONE_NIGHT.heic — Prise de vue nocturne Apple</option>
+        </select>
+        <button class="btn btn-accent btn-sm" onclick="loadExifForensics()">🔄 Analyser</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="ct">Aperçu & Carte Géographique</div>
+          <img id="exif-img-display" class="exif-preview-img" alt="Aperçu Photo" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='240'><rect width='100%' height='100%' fill='%231a2030'/><text x='50%' y='50%' fill='%2300e5c3' font-family='monospace' font-size='14' text-anchor='middle'>EXIF CAMERA CAPTURE</text></svg>">
+          <div id="exif-tamper-box" style="margin-top:10px;padding:10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="exif-tamper-badge" class="pill pill-green">Authentique (Original)</span>
+              <span style="font-size:11px;color:var(--muted)" id="exif-tamper-text">Aucune altération logicielle détectée</span>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            <div class="ct">Localisation GPS extraite</div>
+            <div id="exif-gps-info" style="font-family:var(--mono);font-size:12px;margin:4px 0;color:var(--accent)">12.36566° N, -1.53388° W (Alt: 304m)</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="exif-gps-addr">Ouagadougou, Secteur 4 — Précision GPS: 4.8m</div>
+            <button class="btn btn-blue btn-sm" onclick="nav('carto')">🗺 Projeter sur la cartographie forensique</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ct">Table des Métadonnées EXIF / TIFF / MakerNotes</div>
+          <div class="twrap" style="max-height:460px;overflow-y:auto">
+            <table>
+              <thead><tr><th>Balise EXIF</th><th>Valeur décodée</th><th>Signification forensique</th></tr></thead>
+              <tbody id="exif-tags-table">
+                <tr><td colspan="3" style="text-align:center;color:var(--muted)">Chargement...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HEX VIEWER & MAGIC CARVER -->
+    <div id="page-hexviewer" class="page">
+      <div class="sct-hdr">
+        <div>
+          <h2>🔬 Inspecteur Hexadécimal & Signatures Magiques</h2>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Analyse brute bit-à-bit, calcul d'entropie de Shannon, reconnaissance d'en-têtes et extraction de chaînes (Strings).</div>
+        </div>
+        <div class="spacer"></div>
+        <select id="hex-sample-sel" onchange="changeHexSample()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11.5px">
+          <option value="sqlite">msgstore.db (Base SQLite chiffrée / déchiffrée)</option>
+          <option value="jpeg">photo_preuve.jpg (En-tête JFIF FF D8 FF E0)</option>
+          <option value="png">screenshot.png (Signature 89 50 4E 47)</option>
+          <option value="zip">sauvegarde.ab / apk (En-tête ZIP 50 4B 03 04)</option>
+          <option value="pdf">rapport_confidentiel.pdf (Header %PDF-1.7)</option>
+          <option value="encrypted">userdata_encrypted.bin (Haute entropie AES-256)</option>
+        </select>
+        <button class="btn btn-accent btn-sm" onclick="loadHexViewer()">🔄 Recharger</button>
+      </div>
+
+      <div class="grid-3" style="margin-bottom:14px">
+        <div class="card">
+          <div class="ct">Signature Magique Détectée</div>
+          <div id="hex-magic-name" style="font-size:16px;font-weight:700;color:var(--accent)">SQLite format 3</div>
+          <div id="hex-magic-bytes" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px">53 51 4C 69 74 65 20 66 6F 72 6D 61 74 20 33 00</div>
+        </div>
+        <div class="card">
+          <div class="ct">Entropie de Shannon (0 à 8.0)</div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span id="hex-entropy-val" style="font-size:20px;font-weight:700;font-family:var(--mono)">4.21 / 8.0</span>
+            <span id="hex-entropy-badge" class="pill pill-blue">Structuré / Texte</span>
+          </div>
+          <div class="entropy-meter" style="margin-top:8px">
+            <div id="hex-entropy-bar" class="entropy-fill" style="width:52%;background:var(--blue)"></div>
+          </div>
+          <div id="hex-entropy-desc" style="font-size:10.5px;color:var(--muted);margin-top:4px">Probabilité de chiffrement : Faible (structure de table lisible)</div>
+        </div>
+        <div class="card">
+          <div class="ct">Taille & Offsets</div>
+          <div id="hex-filesize" style="font-size:16px;font-weight:700;font-family:var(--mono)">65 536 octets</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Offset visualisé : <span class="mono" style="color:var(--text)">0x00000000 → 0x00000200</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div class="ct" style="margin:0">Écran Hexadécimal (Vue 16 Octets / Ligne)</div>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost btn-sm" onclick="jumpHexOffset(0)">0x0000 (Début)</button>
+          <button class="btn btn-ghost btn-sm" onclick="jumpHexOffset(256)">0x0100 (Page 1)</button>
+          <button class="btn btn-ghost btn-sm" onclick="jumpHexOffset(512)">0x0200 (Page 2)</button>
+        </div>
+        <div class="hex-container" id="hex-dump-area">
+          Chargement du flux binaire...
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sct-hdr" style="margin-bottom:10px">
+          <h2>🔎 Chaînes de caractères extraites (Strings Carving)</h2>
+          <div class="spacer"></div>
+          <span style="font-size:11px;color:var(--muted)">ASCII / Unicode $ge$ 4 caractères</span>
+        </div>
+        <div class="twrap">
+          <table>
+            <thead><tr><th>Offset</th><th>Chaîne découverte</th><th>Type détecté</th><th>Signification forensique</th></tr></thead>
+            <tbody id="hex-strings-table"><tr><td colspan="4" style="text-align:center;color:var(--muted)">Chargement...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- HASH & IOC INTEGRITY CHECK -->
+    <div id="page-iocheck" class="page">
+      <div class="sct-hdr">
+        <div>
+          <h2>🛡️ Contrôle d'Intégrité, Hashs & Signatures IOC</h2>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Validation cryptographique (MD5, SHA1, SHA256), vérification base blanche NSRL et détection d'indicateurs de compromission.</div>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn btn-accent btn-sm" onclick="loadIocCheck()">🔄 Scanner Scellés</button>
+        <button class="btn btn-blue btn-sm" onclick="openPvModal()">⚖️ Rédiger Procès-Verbal (ISO 27037)</button>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat"><div class="ct">Scellés vérifiés</div><div class="v" id="ioc-stat-total">12</div><div class="l">empreintes calculées</div></div>
+        <div class="card stat"><div class="ct">Intégrité conforme</div><div class="v" id="ioc-stat-ok" style="color:var(--success)">11</div><div class="l">hashes concordants</div></div>
+        <div class="card stat"><div class="ct">Alertes IOC</div><div class="v" id="ioc-stat-warn" style="color:var(--danger)">1</div><div class="l">signature suspecte</div></div>
+        <div class="card stat"><div class="ct">Base NSRL / Système</div><div class="v" id="ioc-stat-nsrl" style="color:var(--blue)">8</div><div class="l">fichiers légitimes OS</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="sct-hdr" style="margin-bottom:10px">
+          <h2>📋 Matrice de Vérification Cryptographique des Preuves</h2>
+          <div class="spacer"></div>
+          <input type="text" id="ioc-search-input" placeholder="Filtrer nom ou hash..." oninput="filterIocTable()" style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:11.5px;color:var(--text);width:200px">
+        </div>
+        <div class="twrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pièce / Fichier</th>
+                <th>Taille</th>
+                <th>SHA-256 (Scellé)</th>
+                <th>MD5</th>
+                <th>Statut Intégrité</th>
+                <th>Classification IOC / NSRL</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="ioc-table-body">
+              <tr><td colspan="7" style="text-align:center;color:var(--muted)">Chargement des hashs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sct-hdr" style="margin-bottom:10px">
+          <h2>🎯 Règles YARA Forensiques & Détection de Spyware</h2>
+          <div class="spacer"></div>
+          <button class="btn btn-accent btn-sm" onclick="runYaraScan()">▶ Lancer Scan YARA</button>
+        </div>
+        <div class="twrap">
+          <table>
+            <thead><tr><th>Règle YARA</th><th>Menace ciblée</th><th>Gravité</th><th>Fichier identifié</th><th>Signature découverte</th><th>Recommandation</th></tr></thead>
+            <tbody id="yara-table-body"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Chargement des règles...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+<!-- FILTRES -->
     <div id="page-filtres" class="page">
       <div class="sct-hdr"><h2>🔎 Filtres avancés</h2><div class="spacer"></div><button class="btn btn-accent" onclick="openFilterModal()">+ Nouveau filtre</button></div>
       <div class="card" style="margin-bottom:14px">
@@ -989,7 +1250,12 @@ function mods(){
         {id:'calendar',name:'Calendrier',description:'Planning'},
         {id:'cartography',name:'Cartographie',description:'Cartes geo'},
         {id:'filters',name:'Filtres',description:'Recherche'},
-        {id:'reports_gen',name:'Rapports Doc',description:'PDF/Word'}
+        {id:'reports_gen',name:'Rapports Doc',description:'PDF/Word'},
+        {id:'browser',name:'Forensique Web',description:'Historique, signets, téléchargements, cookies'},
+        {id:'exif',name:'Métadonnées EXIF',description:'Analyse photo, GPS, appareil, retouche'},
+        {id:'hexviewer',name:'Inspecteur Hex',description:'Vue binaire, signatures magiques, entropie'},
+        {id:'iocheck',name:'Contrôle Hashs & IOC',description:'MD5, SHA256, base NSRL, règles YARA'},
+        {id:'pv_judiciaire',name:'Procès-Verbal ISO 27037',description:'Acte officiel scellé pour réquisition judiciaire'}
     ];
 }
 function addDays(dateStr, days){
@@ -1086,6 +1352,212 @@ function demoInvoke(cmd,a){
     get_report:async(a2)=>S.reports.find(r=>r.id==a2.report_id),
     sign_report:async(a2)=>{const r=S.reports.find(x=>x.id==a2.report_id);if(!r)throw 'Non trouvé';r.signed=true;return r},
     get_available_templates:async()=>([{id:'tpl-gen',name:'Rapport Général',report_type:'General',description:'Synthèse complète',sections:['Résumé','Méthodologie','Preuves','Analyse','Résultats','Annexes']},{id:'tpl-user',name:'Rapport Suspect',report_type:'SpecificUser',description:'Focus individu',sections:['Identité','Activité','Finance','Comms','Localisation','Conclusion']},{id:'tpl-device',name:'Rapport Appareil',report_type:'DeviceReport',description:'Tech + données',sections:['Info tech','Données','Apps','Actions','Hashes']},{id:'tpl-timeline',name:'Rapport Timeline',report_type:'TimelineReport',description:'Chronologie',sections:['Chronologie','Événements','Corrélations','Anomalies']},{id:'tpl-custody',name:'Rapport Custody',report_type:'CustodyReport',description:'Chaîne de garde',sections:['Identité','Chaîne','Transferts','Stockage','Destitution']},{id:'tpl-money',name:'Rapport Flux',report_type:'MoneyFlowReport',description:'Analyse financière',sections:['Résumé','Graphe','Comptes','Transactions','Anomalies']}]),
+    
+    inspect_hex_data:async(a2)=>{
+      await d(250);
+      const sample = a2.sample || 'sqlite';
+      let magic = { name:'SQLite format 3', hex:'53 51 4C 69 74 65 20 66 6F 72 6D 61 74 20 33 00', mime:'application/vnd.sqlite3' };
+      let entropy = 4.21, entDesc = 'Probabilité de chiffrement : Faible (structure de table lisible)', entBadge = 'Structuré / Texte', entColor = 'var(--blue)';
+      let size = 65536;
+      let dump = [];
+      let strings = [];
+
+      if(sample === 'jpeg'){
+        magic = { name:'JPEG Raw Image (JFIF/EXIF)', hex:'FF D8 FF E0 00 10 4A 46 49 46 00 01 01 01 00 60', mime:'image/jpeg' };
+        entropy = 7.78; entDesc = 'Haute entropie (Flux binaire compressé avec perte Huffman)'; entBadge = 'Compressé JPEG'; entColor = 'var(--accent)';
+        size = 1482910;
+        strings = [
+          { offset:'0x00000006', str:'JFIF (JPEG File Interchange Format)', type:'FORMAT', meaning:'En-tête de standard image' },
+          { offset:'0x0000002A', str:'Exif..MM.*..Canon EOS 90D', type:'METADATA', meaning:'Appareil photo d origin identifié' },
+          { offset:'0x0000010E', str:'2024:03:15 08:14:22', type:'TIMESTAMP', meaning:'Horodatage matériel de capture' },
+          { offset:'0x00000320', str:'GPS: 12.36566 -1.53388', type:'GEOLOC', meaning:'Coordonnées géographiques intégrées' }
+        ];
+      } else if(sample === 'png'){
+        magic = { name:'Portable Network Graphics (PNG)', hex:'89 50 4E 47 0D 0A 1A 0A 00 00 00 0D 49 48 44 52', mime:'image/png' };
+        entropy = 7.64; entDesc = 'Entropie élevée (Compression DEFLATE sans perte)'; entBadge = 'Compressé PNG'; entColor = 'var(--blue)';
+        size = 842100;
+        strings = [
+          { offset:'0x0000000C', str:'IHDR (Image Header Chunk)', type:'CHUNK', meaning:'Dimensions et profondeur de couleur' },
+          { offset:'0x00000030', str:'sRGB IEC61966-2.1', type:'PROFILE', meaning:'Espace colorimétrique standard' },
+          { offset:'0x00000084', str:'IDAT (Image Data Stream)', type:'STREAM', meaning:'Données pixels compressées' }
+        ];
+      } else if(sample === 'zip'){
+        magic = { name:'Archive ZIP / APK Android Container', hex:'50 4B 03 04 14 00 08 00 08 00 68 83 45 58 F1 D2', mime:'application/zip' };
+        entropy = 7.82; entDesc = 'Haute entropie (Archive conteneur compressée)'; entBadge = 'Archive ZIP'; entColor = 'var(--warn)';
+        size = 18402910;
+        strings = [
+          { offset:'0x0000001E', str:'AndroidManifest.xml', type:'ANDROID', meaning:'Manifeste d application Android binaire' },
+          { offset:'0x00000140', str:'classes.dex', type:'BYTECODE', meaning:'Bytecode exécutable machine virtuelle Dalvik' },
+          { offset:'0x00000620', str:'META-INF/CERT.RSA', type:'SECURITY', meaning:'Certificat et signature cryptographique APK' }
+        ];
+      } else if(sample === 'pdf'){
+        magic = { name:'Document Portable Document Format (PDF)', hex:'25 50 44 46 2D 31 2E 37 0D 25 E2 E3 CF D3 0D 0A', mime:'application/pdf' };
+        entropy = 5.12; entDesc = 'Entropie moyenne (Flux de texte et objets binaire zlib)'; entBadge = 'Document PDF'; entColor = 'var(--accent)';
+        size = 312000;
+        strings = [
+          { offset:'0x00000000', str:'%PDF-1.7 (Adobe Acrobat Standard)', type:'HEADER', meaning:'Version du format de document' },
+          { offset:'0x00000080', str:'/Title (RAPPORT CONFIDENTIEL D ENQUETE)', type:'METADATA', meaning:'Titre du document interne' },
+          { offset:'0x00000120', str:'/Author (Commandant D. Ouedraogo)', type:'AUTHOR', meaning:'Auteur répertorié dans les métadonnées' },
+          { offset:'0x00000210', str:'/Producer (macOS Version 14.4 Quartz)', type:'SYSTEM', meaning:'Moteur d impression / Système source' }
+        ];
+      } else if(sample === 'encrypted'){
+        magic = { name:'Données Chiffrées / Haute Entropie (Inconnu)', hex:'E4 F1 90 2A 88 C7 1B FA 92 DD 03 A9 5F 81 74 CE', mime:'application/octet-stream' };
+        entropy = 7.99; entDesc = 'Entropie maximale (Cryptogramme AES-256 ou compression extrême)'; entBadge = 'Chiffré / Chiffre fort'; entColor = 'var(--danger)';
+        size = 4194304;
+        strings = [
+          { offset:'0x00000000', str:'[Aucune chaîne de caractères lisible en clair]', type:'ANOMALY', meaning:'Absence de texte ASCII sur 4 Mo - Chiffrement confirmé' }
+        ];
+      } else {
+        magic = { name:'SQLite 3 Database (msgstore / wa.db / mmssms)', hex:'53 51 4C 69 74 65 20 66 6F 72 6D 61 74 20 33 00', mime:'application/vnd.sqlite3' };
+        entropy = 4.21; entDesc = 'Entropie modérée (Format tabulaire SQLite alternant b-tree et chaînes)'; entBadge = 'Base SQLite'; entColor = 'var(--blue)';
+        size = 38200000;
+        strings = [
+          { offset:'0x00000000', str:'SQLite format 3\0', type:'HEADER', meaning:'Signature officielle SQLite' },
+          { offset:'0x00000060', str:'CREATE TABLE messages (_id INTEGER PRIMARY KEY...)', type:'SCHEMA', meaning:'Schéma de la table WhatsApp' },
+          { offset:'0x00000210', str:'+22670123456@s.whatsapp.net', type:'PHONE/JID', meaning:'Identifiant suspect extrait de la zone libre' },
+          { offset:'0x000003A4', str:'Rendez-vous 20h port de peche', type:'TEXT', meaning:'Message extrait du carver de blocs libres' }
+        ];
+      }
+
+      const bytesHex = magic.hex.split(' ');
+      for(let i=0; i<16; i++){
+        const offset = (a2.offset || 0) + (i * 16);
+        const hexOff = '0x' + offset.toString(16).padStart(8, '0');
+        let rowBytes = [];
+        let rowAscii = [];
+        for(let j=0; j<16; j++){
+          let byte = bytesHex[(i*16 + j) % bytesHex.length] || ((offset*3 + j*7 + 41) % 256).toString(16).padStart(2,'0').toUpperCase();
+          if(sample==='encrypted') byte = ((offset*13 + j*31 + 79) % 256).toString(16).padStart(2,'0').toUpperCase();
+          rowBytes.push(byte);
+          const val = parseInt(byte, 16);
+          rowAscii.push((val>=32 && val<=126) ? String.fromCharCode(val) : '.');
+        }
+        dump.push({ offset: hexOff, hex: rowBytes.join(' '), ascii: rowAscii.join('') });
+      }
+
+      return { magic, entropy, entDesc, entBadge, entColor, size, dump, strings };
+    },
+
+    analyze_browser_artifacts:async(a2)=>{
+      await d(300);
+      return {
+        stats: { pages: 284, searches: 58, downloads: 14, cookies: 42 },
+        history: [
+          { date:'2026-09-19 23:14:02', app:'Chrome', title:'Connexion - Orange Money Webmail', url:'https://orangemoney.bf/portal/auth', visits:12, profile:'Default' },
+          { date:'2026-09-19 22:45:10', app:'Chrome', title:'WhatsApp Web', url:'https://web.whatsapp.com/', visits:84, profile:'Default' },
+          { date:'2026-09-19 20:12:44', app:'Safari', title:'Itinéraire - Aéroport de Ouagadougou', url:'https://maps.google.com/dir/aeroport', visits:3, profile:'Private' },
+          { date:'2026-09-19 18:30:19', app:'Chrome', title:'Wave Digital Finance - Transfert d argent', url:'https://www.wave.com/fr/', visits:19, profile:'Default' },
+          { date:'2026-09-18 21:05:00', app:'Firefox', title:'Achat carte SIM prépayée sans pièce d identité', url:'https://duckduckgo.com/?q=sim+anonyme', visits:2, profile:'Incognito' },
+          { date:'2026-09-18 14:22:11', app:'Chrome', title:'ProtonMail: Boîte de réception chiffrée', url:'https://mail.proton.me/u/0/inbox', visits:6, profile:'Default' }
+        ],
+        searches: [
+          { date:'2026-09-19 21:10:04', engine:'Google', query:'taux change euro fcfa marche noir ouaga', category:'FINANCE', context:'Recherche financière' },
+          { date:'2026-09-19 20:05:12', engine:'Google', query:'vols air france ouagadougou paris heure depart', category:'VOYAGE', context:'Organisation déplacement' },
+          { date:'2026-09-18 21:04:30', engine:'DuckDuckGo', query:'acheter puce telephonique sans enregistrement', category:'SUSPECT', context:'Tentative anonymisation' },
+          { date:'2026-09-17 11:20:18', engine:'Bing', query:'relais gsm kosyam antenne couverture', category:'TELECOM', context:'Vérification antenne' }
+        ],
+        downloads: [
+          { date:'2026-09-19 19:40:00', file:'recu_transfert_150000.pdf', size:184200, url:'https://wave.com/tx/download/150000', sha256:'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', status:'Terminé' },
+          { date:'2026-09-18 22:14:02', file:'vpn_master_pro.apk', size:18204900, url:'https://apkpure.com/vpn-master-pro.apk', sha256:'a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00', status:'Terminé' },
+          { date:'2026-09-18 10:02:11', file:'coordonnees_bancaires_secret.xlsx', size:48200, url:'https://mail.proton.me/attachment/doc9', sha256:'c1a2b3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00', status:'Terminé' }
+        ],
+        cookies: [
+          { domain:'.google.com', name:'SSID / HSID', val:'AYu39X...d81K', expiry:'2027-09-19', secure:true, account:'awa.traore@gmail.com' },
+          { domain:'.whatsapp.com', name:'wa_web_session', val:'WA-AUTH-9023', expiry:'2026-12-31', secure:true, account:'+22670123456' },
+          { domain:'.wave.com', name:'jwt_token', val:'eyJhbGciOiJIUzI1...', expiry:'2026-09-26', secure:true, account:'Compte Wave 70123456' },
+          { domain:'.proton.me', name:'AUTH-TOKEN', val:'PRT-88402-KEY', expiry:'2026-10-18', secure:true, account:'contact.secret@proton.me' }
+        ]
+      };
+    },
+
+    analyze_exif_metadata:async(a2)=>{
+      await d(250);
+      const sel = a2.sample || 'IMG_20240315_081422.jpg';
+      if(sel.includes('RETOUCHE')){
+        return {
+          filename: sel,
+          tampered: true,
+          tamper_badge: 'pill-red',
+          tamper_title: 'Altération Détectée (Logiciel de retouche)',
+          tamper_desc: 'Traces formelles d édition Adobe Photoshop 24.1 trouvées dans les balises XMP. Écart d horodatage de 3h42m entre DateTimeOriginal et ModifyDate.',
+          gps: { lat: 12.37012, lon: -1.51944, alt: 298, addr: 'Ouagadougou, Zone Commerciale — Modifié' },
+          tags: [
+            { tag:'Software', val:'Adobe Photoshop 24.1 (Windows)', meaning:'Éditeur graphique ayant altéré l image brute' },
+            { tag:'DateTimeOriginal', val:'2024:03:15 08:14:22', meaning:'Date de capture présumée' },
+            { tag:'ModifyDate', val:'2024:03:15 11:56:40', meaning:'Date de dernière sauvegarde / retouche' },
+            { tag:'ExifImageWidth / Height', val:'3840 x 2160 px', meaning:'Recadrage identifié' },
+            { tag:'Camera Make / Model', val:'Canon EOS 90D', meaning:'Boîtier initial d acquisition' },
+            { tag:'XMP-photoshop:History', val:'layers-cloned; mask-applied', meaning:'Historique d actions Photoshop enregistré' }
+          ]
+        };
+      }
+      if(sel.includes('WHATSAPP')){
+        return {
+          filename: sel,
+          tampered: false,
+          tamper_badge: 'pill-warn',
+          tamper_title: 'Métadonnées Supprimées (Compression Réseau)',
+          tamper_desc: 'Image transmise via WhatsApp. Le protocole de messagerie supprime automatiquement les balises EXIF (GPS, appareil photo) pour protéger la vie privée des utilisateurs.',
+          gps: { lat: 0, lon: 0, alt: 0, addr: 'Aucune coordonnée GPS (Balise purgée à l envoi)' },
+          tags: [
+            { tag:'ColorSpace', val:'sRGB', meaning:'Profil colorimétrique standard web' },
+            { tag:'Compression', val:'JPEG (libjpeg-turbo / WhatsApp encoder)', meaning:'Ré-encodage serveur de messagerie' },
+            { tag:'ExifOffset', val:'Non présent', meaning:'Bloc EXIF nettoyé' },
+            { tag:'FileSource', val:'Média transféré', meaning:'Origine externe ou sauvegarde .crypt15' }
+          ]
+        };
+      }
+      return {
+        filename: sel,
+        tampered: false,
+        tamper_badge: 'pill-green',
+        tamper_title: 'Authentique — Cliché Original de Capteur',
+        tamper_desc: 'Aucune trace de modification logicielle. Données capteur, géolocalisation et horodatage matériel parfaitement concordants.',
+        gps: { lat: 12.36566, lon: -1.53388, alt: 304, addr: 'Ouagadougou, Secteur 4 — Précision GPS: 4.8m' },
+        tags: [
+          { tag:'Make / Model', val:'TECNO Spark 10 Pro (KI7)', meaning:'Terminal mobile ayant capturé la photo' },
+          { tag:'Lens / FocalLength', val:'4.22 mm (équiv. 28mm f/1.6)', meaning:'Optique principale grand angle' },
+          { tag:'ISOSpeedRatings', val:'ISO 114 (1/250 sec)', meaning:'Conditions de lumière du jour naturelle' },
+          { tag:'DateTimeOriginal', val:'2024:03:15 08:14:22 UTC', meaning:'Date matérielle synchronisée NTP' },
+          { tag:'GPSLatitude / Longitude', val:'12° 21' 56.37" N, 1° 32' 1.96" W', meaning:'Position GPS certifiée au déclenchement' },
+          { tag:'Flash', val:'Non déclenché (Auto)', meaning:'Éclairage ambiant suffisant' },
+          { tag:'Software', val:'Spark-10-Pro-H894-V12', meaning:'Firmware d origine sans éditeur tiers' }
+        ]
+      };
+    },
+
+    check_hashes_ioc:async(a2)=>{
+      await d(250);
+      return {
+        items: [
+          { name:'msgstore.db', size:38200000, sha256:'aa11bb22cc33dd44ee55ff6677889900aabbccddeeff00112233445566778899', md5:'99aa88bb77cc6600dd11ee22ff334455', status:'CONFORME', ioc:'PREUVE_CLE', ioc_badge:'pill-purple', note:'Base WhatsApp déchiffrée - Intégrité scellée' },
+          { name:'sd_copy.img', size:32140000000, sha256:'a3f8c1d2e4b7f0129a5b6c7d8e9f00112233445566778899aabbccddeeff00', md5:'f2a1b3c4d5e60718293a4b5c6d7e8f90', status:'CONFORME', ioc:'IMAGE_BRUTE', ioc_badge:'pill-blue', note:'Image bit-à-bit carte SD scellée ISO 27037' },
+          { name:'vpn_master_pro.apk', size:18204900, sha256:'a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00', md5:'55ef66aa77bb8800cc11dd22ee33ff44', status:'SUSPECT', ioc:'MALWARE_TROJAN', ioc_badge:'pill-red', note:'Signature correspondant au spyware Cerberus Banker' },
+          { name:'system.img', size:3200000000, sha256:'7a8b9c0d1e2f3a4b5c6d7e8f90112233445566778899aabbccddeeff00112233', md5:'00112233445566778899aabbccddeeff', status:'CONFORME', ioc:'NSRL_KNOWN_GOOD', ioc_badge:'pill-green', note:'Fichier certifié dans la base NIST/NSRL (OS sain)' },
+          { name:'sauvegarde.ab', size:86400000, sha256:'c1d2e3f4a5b6c7d8e9f0112233445566778899aabbccddeeff0011223344556677', md5:'112233445566778899aabbccddeeff00', status:'CONFORME', ioc:'SAUVEGARDE_ADB', ioc_badge:'pill-blue', note:'Sauvegarde Android officielle scellée' }
+        ],
+        yara_rules: [
+          { rule:'ANDROID_SPYWARE_GENERIC', threat:'Trojan Bancaire / Keylogger', severity:'CRITICAL', target:'vpn_master_pro.apk (classes.dex)', match:'str_c2_url = "http://89.208.107.4:8080/gate.php"', action:'Isolement immédiat & Extraction clés C2' },
+          { rule:'APK_DYNAMIC_DEX_LOADER', threat:'Chargeur de code furtif (Dropper)', severity:'HIGH', target:'vpn_master_pro.apk', match:'DexClassLoader.loadClass() sur fichier .payload', action:'Désextraction de la charge utile secondaire' },
+          { rule:'SUSPICIOUS_SMS_INTERCEPT', threat:'Interception SMS OTP / 2FA', severity:'HIGH', target:'vpn_master_pro.apk (Manifest)', match:'permission.RECEIVE_SMS avec priorité 999', action:'Consigner comme preuve de fraude bancaire' }
+        ]
+      };
+    },
+
+    generate_pv_judiciaire:async(a2)=>{
+      await d(200);
+      const c = (S.cases||[]).find(x=>x.id===S.activeCaseId)||{ reference:'PROC-2026-BURKINA-092', name:'Affaire Ouedraogo', operator:S.operator };
+      return {
+        ref: a2.ref || c.reference || 'PROC-2026-092',
+        court: a2.court || 'Tribunal de Grande Instance — Section Cybersécurité',
+        expert: a2.expert || S.operator || 'Investigateur FIDO-LABS',
+        date: new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
+        evidence_count: 3,
+        sha256_seal: 'c1a2b3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00',
+        iso_standard: 'ISO/IEC 27037:2012 (Lignes directrices pour l acquisition et la préservation de preuves numériques)'
+      };
+    },
+
     get_data_analysis:async(a2)=>{
       const ex=a2.extraction||S.lastExtraction||{};
       const md=a2.media||S.lastMedia||{};
@@ -1202,14 +1674,19 @@ function demoInvoke(cmd,a){
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function log(type,msg){const o=document.getElementById('termout');const ts=new Date().toTimeString().slice(0,8);const c={ok:'log-ok',err:'log-err',inf:'log-inf',wrn:'log-wrn',acc:'log-acc'}[type]||'log-inf';const p={ok:'[OK ]',err:'[ERR]',inf:'[INF]',wrn:'[WRN]',acc:'[ACT]'}[type]||'[INF]';const d=document.createElement('div');d.className='lg';d.innerHTML=`<span class="lg-t">${ts}</span><span class="${c}">${esc(p+' '+msg)}</span>`;o.appendChild(d);o.scrollTop=o.scrollHeight}
 function clearTerm(){document.getElementById('termout').innerHTML=''}
-function nav(pg){S.currentPage=pg;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg)?.classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.querySelector(`.nav-item[onclick*="${pg}"]`)?.classList.add('active');const T={dashboard:'Dashboard',cases:'Dossiers',mobile:'Mobile',sdcard:'Carte SD',disk:'Disque',whatsapp:'WhatsApp',money:'Money Flow',timeline:'Timeline',calendar:'Calendrier',csm:'Chain Custody',carto:'Cartographie',graphes:'Graphes','data-analysis':'Data Analyse',filtres:'Filtres',rapports:'Rapports',audit:'Audit',licence:'Licence',settings:'Paramètres'};document.getElementById('topbar-title').textContent=T[pg]||pg;if(pg==='licence')loadLic();if(pg==='cases')loadCases();if(pg==='calendar')loadCalendar();if(pg==='csm')loadCSM();if(pg==='carto')loadCarto();if(pg==='graphes')buildLinkGraph();if(pg==='data-analysis')loadDataAnalysis();if(pg==='filtres')loadFilters();if(pg==='rapports')loadReports();if(pg==='audit')loadAudit();if(pg==='timeline')loadTlSel()}
+function nav(pg){S.currentPage=pg;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg)?.classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.querySelector(`.nav-item[onclick*="${pg}"]`)?.classList.add('active');const T={dashboard:'Dashboard',cases:'Dossiers',mobile:'Mobile',sdcard:'Carte SD',disk:'Disque',whatsapp:'WhatsApp',money:'Money Flow',timeline:'Timeline',calendar:'Calendrier',csm:'Chain Custody',carto:'Cartographie',graphes:'Graphes','data-analysis':'Data Analyse',browser:'Navigateurs & Web',exif:'Métadonnées EXIF',hexviewer:'Inspecteur Hex & Signatures',iocheck:'Contrôle Hashs & IOC',filtres:'Filtres',rapports:'Rapports & PV',audit:'Audit',licence:'Licence',settings:'Paramètres'};document.getElementById('topbar-title').textContent=T[pg]||pg;if(pg==='licence')loadLic();if(pg==='cases')loadCases();if(pg==='calendar')loadCalendar();if(pg==='csm')loadCSM();if(pg==='carto')loadCarto();if(pg==='graphes')buildLinkGraph();if(pg==='data-analysis')loadDataAnalysis();if(pg==='filtres')loadFilters();if(pg==='rapports')loadReports();if(pg==='audit')loadAudit();if(pg==='timeline')loadTlSel();
+  if(pg==='browser')loadBrowserForensics();
+  if(pg==='exif')loadExifForensics();
+  if(pg==='hexviewer')loadHexViewer();
+  if(pg==='iocheck')loadIocCheck();
+}
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('expanded')}
 function applyTheme(t){const r=document.documentElement;if(t==='light'||t==='dark')r.setAttribute('data-theme',t);else r.removeAttribute('data-theme');try{localStorage.setItem('fido_theme',t||'auto')}catch(e){}}
 function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme');const isDark=cur?cur==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;applyTheme(isDark?'light':'dark');toast('Thème '+(isDark?'clair':'sombre'),'ok')}
 function toggleConsole(){const t=document.getElementById('terminal');if(!t)return;t.style.display=(getComputedStyle(t).display==='none')?'flex':'none'}
 function mbCloseAll(){document.querySelectorAll('#menubar .mb-drop.open').forEach(d=>d.classList.remove('open'));document.querySelectorAll('#menubar .mb-btn.open').forEach(b=>b.classList.remove('open'))}
 function mbToggle(ev,id){ev.stopPropagation();const d=document.getElementById(id);const was=d.classList.contains('open');mbCloseAll();if(!was){d.classList.add('open');ev.currentTarget.classList.add('open')}}
-function mbAction(a){mbCloseAll();switch(a){case'newSession':openCaseModal();break;case'openSession':case'sessions':openSessionModal();break;case'scanUsb':detectDevice();break;case'report':nav('rapports');try{openReportModal()}catch(e){}break;case'quit':if(confirm('Quitter FIDO-LABS ?')){try{const w=window.__TAURI__&&window.__TAURI__.window;if(w&&w.getCurrentWindow){w.getCurrentWindow().close()}else if(w&&w.appWindow){w.appWindow.close()}else{window.close()}}catch(e){toast('Fermez la fenêtre manuellement','wrn')}}break;case'theme':toggleTheme();break;case'sidebar':toggleSidebar();break;case'console':toggleConsole();break;case'fullscreen':try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}break;case'dashboard':nav('dashboard');break;case'guide':showGuide();break;case'shortcuts':showShortcuts();break;case'website':showWebsite();break;case'about':showAbout();break;case'license':nav('licence');break;}}
+function mbAction(a){mbCloseAll();switch(a){case'newSession':openCaseModal();break;case'openSession':case'sessions':openSessionModal();break;case'scanUsb':detectDevice();break;case'report':nav('rapports');try{openReportModal()}catch(e){}break;case'quit':toast('Session terminée — Vous pouvez fermer la fenêtre.','inf');log('inf','Fermeture de session demandée.');break;case'theme':toggleTheme();break;case'sidebar':toggleSidebar();break;case'console':toggleConsole();break;case'fullscreen':try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}break;case'dashboard':nav('dashboard');break;case'guide':showGuide();break;case'shortcuts':showShortcuts();break;case'website':showWebsite();break;case'about':showAbout();break;case'license':nav('licence');break;}}
 async function openSessionModal(){openModal('modal-session');try{await loadCases()}catch(e){}const tb=document.getElementById('sess-list');const cs=S.cases||[];if(!cs.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Aucune session locale. Créez-en une avec « Nouvelle session ».</td></tr>';return}tb.innerHTML=cs.map(c=>`<tr><td class="mono">${esc(c.reference)}</td><td>${esc(c.name)}</td><td class="mono">${new Date(c.created_at).toLocaleDateString('fr-FR')}</td><td><span class="pill ${c.status==='OUVERT'?'pill-green':c.status==='ARCHIVE'?'pill-muted':'pill-red'}">${esc(c.status)}</span></td><td><button class="btn btn-accent btn-sm" onclick="openSession('${esc(c.id)}')">Ouvrir</button></td></tr>`).join('')}
 function openSession(id){const c=(S.cases||[]).find(x=>x.id===id);S.activeCaseId=id;toast('Session ouverte : '+((c&&c.name)||id),'ok');log('acc','Session ouverte : '+((c&&c.reference)||id));closeModal('modal-session');nav('dashboard')}
 async function showAbout(){openModal('modal-about');let a={};try{a=(await invoke('get_app_info',{}))||{}}catch(e){a={}}const hw=(S.license&&S.license.hardware_id)||'—';const tier=(S.license&&S.license.tier)||'';const rows=[['Nom',a.name||'FIDO-LABS'],['Version',(a.version||'3.0.0')],['Nom de code',a.codename||'—'],['Build',a.build||'—'],['Licence active',tier||(a.license||'—')],['Auteur',a.author||'FIDO-LABS Team'],['Support',a.support_email||'—'],['ID machine',hw]];document.getElementById('ab-name').textContent=a.name||'FIDO-LABS';document.getElementById('ab-tag').textContent='Forensic Integrated Data Operator'+(a.codename?(' · '+a.codename):'');document.getElementById('ab-grid').innerHTML=rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(r[1])}</div>`).join('');const f=a.features||[];document.getElementById('ab-features').innerHTML=(f.length?('<div style="font-weight:600;color:var(--text);margin:2px 0 4px">Capacités</div>'+f.map(x=>'• '+esc(x)).join('<br>')):'')+`<div style="margin-top:8px;color:var(--faint)">${esc(a.copyright||'© FIDO-LABS')}</div>`}
@@ -1606,5 +2083,43 @@ document.addEventListener('DOMContentLoaded',async function(){log('inf','FIDO-LA
   <div id="loading-percent">0%</div>
   <button id="save-btn" onclick="saveLocally()">💾 Sauvegarder localement</button>
 </div>
+
+<div id="modal-pv" class="modal-layer" hidden onclick="if(event.target===this)closeModal('modal-pv')">
+  <div class="modal" style="max-width:840px;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="font-size:24px">⚖️</span>
+      <div>
+        <h3 style="margin:0">Procès-Verbal d'Examen Forensique Numérique (ISO/IEC 27037)</h3>
+        <div style="font-size:11px;color:var(--muted)">Génération d'acte de procédure conforme aux réquisitions judiciaires</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-accent btn-sm" onclick="printPv()">🖨️ Imprimer / PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-pv')">✕</button>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:12px">
+      <div class="frow"><label>Référence Parquet / Procédure</label><input id="pv-ref" value="PROC-2026-BURKINA-092"></div>
+      <div class="frow"><label>Officier / Expert Requis</label><input id="pv-expert" value="Investigateur FIDO-LABS (Expert Judiciaire Assermenté)"></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:12px">
+      <div class="frow"><label>Tribunal / Juridiction</label><input id="pv-court" value="Tribunal de Grande Instance — Section Cybersécurité"></div>
+      <div class="frow"><label>Objet de la Réquisition</label><input id="pv-obj" value="Extraction bit-à-bit, déchiffrement et analyse forensique de terminal mobile"></div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="ct">Aperçu officiel de l'acte juridique</div>
+      <div id="pv-content" class="pv-sheet">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <div class="modal-footer" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('modal-pv')">Fermer</button>
+      <button class="btn btn-blue" onclick="exportPvText()">💾 Télécharger l'acte (.txt)</button>
+      <button class="btn btn-accent" onclick="printPv()">🖨️ Imprimer l'acte officiel</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
